@@ -1,0 +1,5 @@
+.ipynb_checkpoints
+__pycache__
+weekly_data
+results
+*.png
