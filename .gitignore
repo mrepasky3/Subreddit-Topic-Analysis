@@ -3,3 +3,8 @@ __pycache__
 weekly_data
 results
 *.png
+*.txt
+*.npy
+*.id2word
+*.state
+LDA_model

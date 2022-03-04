@@ -24,17 +24,21 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--n_topics', type=int, default=9)
 parser.add_argument('--weekly_series', action="store_true")
 parser.add_argument('--daily_series', action="store_true")
+parser.add_argument('--load', action="store_true")
 parser.set_defaults(feature=False)
 
+
+
+
 if __name__ == '__main__':
+	args = parser.parse_args()
+	if not os.path.exists("results"):
+		os.mkdir('results')
+	
 	stop_words = stopwords.words('english')
 	stop_words.extend(['im','ive','dont','get','youre','would','thats',
 		'really','one','also','something','even','thing','things','must',
 		'cant','much','could','way','lot','got','get','go','like','th'])
-
-	args = parser.parse_args()
-	if not os.path.exists("results"):
-		os.mkdir('results')
 
 	comments_list = []
 	for data_file in os.listdir('weekly_data'):
@@ -44,49 +48,62 @@ if __name__ == '__main__':
 	comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
 	comments_bow, dictionary = create_dictionary(comments_words)
 
-	lda = gensim.models.LdaMulticore(corpus=comments_bow, id2word=dictionary, num_topics=args.n_topics,
-							   chunksize=500, passes=10, alpha='asymmetric', eta='auto')
+	if not args.load:
+		lda = gensim.models.LdaMulticore(corpus=comments_bow, id2word=dictionary, num_topics=args.n_topics,
+								   chunksize=500, passes=10, alpha='asymmetric', eta='auto')
+		lda.save("results/LDA_model")
 
-	# Compute Coherence Score
-	coherence_model = CoherenceModel(model=lda, texts=comments_words, dictionary=dictionary, coherence='c_v')
-	print("LDA Coherence: {:.3f}".format(coherence_model.get_coherence()))
-	print("LDA Per-Topic Coherence: "+str(coherence_model.get_coherence_per_topic()))
+		coherence_model = CoherenceModel(model=lda, texts=comments_words, dictionary=dictionary, coherence='c_v')
+		print("LDA Coherence: {:.3f}".format(coherence_model.get_coherence()))
+		print("LDA Per-Topic Coherence: "+str(coherence_model.get_coherence_per_topic()))
 
-	report_file = open("results/lda_coherence.txt", "w")
-	report_file.write("LDA Coherence: {:.3f}\n".format(coherence_model.get_coherence()))
-	per_topic_coherence = coherence_model.get_coherence_per_topic()
-	for i in range(len(per_topic_coherence)):
-		report_file.write("Topic {} Coherence: {:.3f}\n".format(i, per_topic_coherence[i]))
-	report_file.close()
+		report_file = open("results/lda_coherence.txt", "w")
+		report_file.write("LDA Coherence: {:.3f}\n".format(coherence_model.get_coherence()))
+		per_topic_coherence = coherence_model.get_coherence_per_topic()
+		for i in range(len(per_topic_coherence)):
+			report_file.write("Topic {} Coherence: {:.3f}\n".format(i, per_topic_coherence[i]))
+		report_file.close()
 
-	topics = lda.show_topics(formatted=False, num_words=20)
-	fig, axes = plt.subplots(3, 3, figsize=(20,8))
-	cloud = WordCloud(stopwords=stop_words,background_color='white')
-	for i, ax in enumerate(axes.flatten()):
-		cloud.generate_from_frequencies(dict(topics[i][1]), max_font_size=300)
-		ax.imshow(cloud)
-		ax.set_title('Topic ' + str(i), fontsize=26)
-		ax.axis('off')
-	plt.tight_layout()
-	plt.savefig("results/LDA_Word_Cloud.png")
-	plt.close()
-	plt.clf()
+		topics = lda.show_topics(formatted=False, num_words=20)
+		fig, axes = plt.subplots(3, 3, figsize=(20,8))
+		cloud = WordCloud(stopwords=stop_words,background_color='white')
+		for i, ax in enumerate(axes.flatten()):
+			cloud.generate_from_frequencies(dict(topics[i][1]), max_font_size=300)
+			ax.imshow(cloud)
+			ax.set_title('Topic ' + str(i), fontsize=26)
+			ax.axis('off')
+		plt.tight_layout()
+		plt.savefig("results/LDA_Word_Cloud.png")
+		plt.close()
+		plt.clf()
+
+	else:
+		lda = gensim.models.LdaModel.load("results/LDA_model")
 
 
 
 
 	if args.weekly_series:
-		
+		'''
+		For each week in the data, collect comments, tokenize them, and form
+		BoW vectors based on pre-defined dictionary. Then, calculate how many times
+		each topic is the predominant topic of a comment for each week. Plot this as
+		a time series, plot the periodogram (reporting top five periods), and plot
+		the Theil-Sen slope estimate.
+		'''
+
+		# create dictionary of tokenized comment lists for each week
 		comments_list_weekly = dict()
 		for data_file in os.listdir('weekly_data'):
 			start = data_file.split('-')[0][-10:]
 			start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
 			
 			loaded_comments = list(pd.read_csv('weekly_data/' + data_file)['body'])
-			tokenized_loaded_comments = prep_for_lda(loaded_comments)
+			tokenized_loaded_comments, _, _ = tokenize_lda(data_cleaning(loaded_comments), bigram_model=bigram_model, trigram_model=trigram_model)
 			bow_loaded_comments = [dictionary.doc2bow(comment) for comment in tokenized_loaded_comments]
 			comments_list_weekly[start_time] = bow_loaded_comments
 		
+		# create dictionary tracking how frequently each topic is present per week
 		topic_multiplicity_weekly = dict()
 		for key in comments_list_weekly.keys():
 			topic_multiplicity_weekly[key] = np.zeros(9)
@@ -97,6 +114,7 @@ if __name__ == '__main__':
 				top_topic = topic_dist[top_topic_idx][0]
 				topic_multiplicity_weekly[key][top_topic] += 1
 
+		# transform this dictionary into a sorted array
 		topic_trends = []
 		for key in topic_multiplicity_weekly.keys():
 			topic_trends.append([key]+list(topic_multiplicity_weekly[key]))
@@ -170,12 +188,20 @@ if __name__ == '__main__':
 
 
 	if args.daily_series:
+		'''
+		For each day in the data, collect comments, tokenize them, and form
+		BoW vectors based on pre-defined dictionary. Then, calculate how many times
+		each topic is the predominant topic of a comment for each day. Plot this as
+		a time series, plot the periodogram (reporting top five periods), and plot
+		the Theil-Sen slope estimate.
+		'''
 
 		full_dataframe = pd.DataFrame()
 		for data_file in os.listdir('weekly_data'):
 			loaded_comments = pd.read_csv('weekly_data/' + data_file)
 			full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
 
+		# create dictionary of tokenized comment lists for each day
 		num_days = (topic_trend_dates[-1] - topic_trend_dates[0] + dt.timedelta(days=7)).days
 		start_datetime = topic_trend_dates[0]
 		comments_list_daily = dict()
@@ -183,10 +209,11 @@ if __name__ == '__main__':
 			this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
 			this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
 			loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
-			tokenized_loaded_comments = prep_for_lda(loaded_comments)
+			tokenized_loaded_comments, _, _ = tokenize_lda(data_cleaning(loaded_comments), bigram_model=bigram_model, trigram_model=trigram_model)
 			bow_loaded_comments = [dictionary.doc2bow(comment) for comment in tokenized_loaded_comments]
 			comments_list_daily[this_start] = bow_loaded_comments
 
+		# create dictionary tracking how frequently each topic is present per day
 		topic_multiplicity_daily = dict()
 		for key in comments_list_daily.keys():
 			topic_multiplicity_daily[key] = np.zeros(9)
@@ -197,6 +224,7 @@ if __name__ == '__main__':
 				top_topic = topic_dist[top_topic_idx][0]
 				topic_multiplicity_daily[key][top_topic] += 1
 
+		# transform this dictionary into a sorted array
 		daily_topic_trends = []
 		for key in topic_multiplicity_daily.keys():
 			daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
