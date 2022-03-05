@@ -7,4 +7,5 @@ results
 *.npy
 *.id2word
 *.state
+*.ipynb
 LDA_model

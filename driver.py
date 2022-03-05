@@ -21,7 +21,7 @@ from gensim.models import CoherenceModel
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--n_topics', type=int, default=9)
+parser.add_argument('--n_topics', type=int, default=15)
 parser.add_argument('--weekly_series', action="store_true")
 parser.add_argument('--daily_series', action="store_true")
 parser.add_argument('--load', action="store_true")
@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
 	if not args.load:
 		lda = gensim.models.LdaMulticore(corpus=comments_bow, id2word=dictionary, num_topics=args.n_topics,
-								   chunksize=500, passes=10, alpha='asymmetric', eta='auto')
+								   chunksize=500, passes=10, alpha='asymmetric', eta='symmetric')
 		lda.save("results/LDA_model")
 
 		coherence_model = CoherenceModel(model=lda, texts=comments_words, dictionary=dictionary, coherence='c_v')
@@ -64,14 +64,27 @@ if __name__ == '__main__':
 			report_file.write("Topic {} Coherence: {:.3f}\n".format(i, per_topic_coherence[i]))
 		report_file.close()
 
-		topics = lda.show_topics(formatted=False, num_words=20)
-		fig, axes = plt.subplots(3, 3, figsize=(20,8))
+		topics_sorted_by_coherence = np.argsort(per_topic_coherence)[::-1]
+		topics_sorted_by_coherence = list(topics_sorted_by_coherence[:9])
+
+		print(topics_sorted_by_coherence)
+
+		topics = lda.show_topics(num_topics=args.n_topics, formatted=False, num_words=20)
+		fig, axs = plt.subplots(3, 3, figsize=(20,8))
 		cloud = WordCloud(stopwords=stop_words,background_color='white')
-		for i, ax in enumerate(axes.flatten()):
-			cloud.generate_from_frequencies(dict(topics[i][1]), max_font_size=300)
-			ax.imshow(cloud)
-			ax.set_title('Topic ' + str(i), fontsize=26)
-			ax.axis('off')
+		k=0
+		for i in range(3):
+			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
+				for topic in topics:
+					if topic[0] == k:
+						topic_dict = dict(topic[1])
+				cloud.generate_from_frequencies(topic_dict, max_font_size=300)
+				axs[i,j].imshow(cloud)
+				axs[i,j].set_title('Topic ' + str(k) + r' | $C_v$: ' + '{:.2f}'.format(per_topic_coherence[k]), fontsize=26)
+				axs[i,j].axis('off')
+				k+=1
 		plt.tight_layout()
 		plt.savefig("results/LDA_Word_Cloud.png")
 		plt.close()
@@ -79,6 +92,11 @@ if __name__ == '__main__':
 
 	else:
 		lda = gensim.models.LdaModel.load("results/LDA_model")
+
+		coherence_model = CoherenceModel(model=lda, texts=comments_words, dictionary=dictionary, coherence='c_v')
+		per_topic_coherence = coherence_model.get_coherence_per_topic()
+		topics_sorted_by_coherence = np.argsort(per_topic_coherence)[::-1]
+		topics_sorted_by_coherence = list(topics_sorted_by_coherence[:9])
 
 
 
@@ -106,7 +124,7 @@ if __name__ == '__main__':
 		# create dictionary tracking how frequently each topic is present per week
 		topic_multiplicity_weekly = dict()
 		for key in comments_list_weekly.keys():
-			topic_multiplicity_weekly[key] = np.zeros(9)
+			topic_multiplicity_weekly[key] = np.zeros(args.n_topics)
 			this_week_comments = comments_list_weekly[key]
 			for comment in this_week_comments:
 				topic_dist = lda.get_document_topics(comment,per_word_topics=False)
@@ -128,15 +146,19 @@ if __name__ == '__main__':
 
 		fig, axs = plt.subplots(3, 3, figsize=(24,15))
 		k = 0
+		color_counter = 0
 		for i in range(3):
 			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
 				axs[i,j].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
-				axs[i,j].scatter(topic_trend_dates, sorted_topic_trends[:,k+1], marker='o', color=color_list[k])
-				axs[i,j].plot(topic_trend_dates, sorted_topic_trends[:,k+1], ls='--', color=color_list[k])
+				axs[i,j].scatter(topic_trend_dates, sorted_topic_trends[:,k+1], marker='o', color=color_list[color_counter])
+				axs[i,j].plot(topic_trend_dates, sorted_topic_trends[:,k+1], ls='--', color=color_list[color_counter])
 				axs[i,j].tick_params(labelsize=18)
 				axs[i,j].tick_params(axis='x', rotation=25)
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
+				color_counter+=1
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/weekly_trends.png")
 		plt.close()
@@ -145,16 +167,20 @@ if __name__ == '__main__':
 		weekly_period_file = open("results/weekly_periods.txt", "w")
 		fig, axs = plt.subplots(3, 3, figsize=(24,15))
 		k = 0
+		color_counter = 0
 		for i in range(3):
 			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
 				freqs, power_spectral_density = signal.periodogram(sorted_topic_trends[:,k+1])
 				power_spectrum_idx = np.argsort(power_spectral_density)
 				weekly_period_file.write("Topic {} Top Five Periods (weeks): ".format(k) + str(1/freqs[power_spectrum_idx][::-1][:5]) + "\n")
-				axs[i,j].semilogy(freqs, np.sqrt(power_spectral_density), color=color_list[k])
+				axs[i,j].semilogy(freqs, np.sqrt(power_spectral_density), color=color_list[color_counter])
 				axs[i,j].set_ylim([1e0, 1e3])
 				axs[i,j].tick_params(labelsize=18)
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
+				color_counter+=1
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/weekly_periodogram.png")
 		plt.close()
@@ -166,18 +192,22 @@ if __name__ == '__main__':
 		fig, axs = plt.subplots(3, 3, figsize=(24,15))
 		time_weeks = ((sorted_topic_trends[:,0] - sorted_topic_trends[0,0])/(7*24*3600)).reshape(-1,1)
 		k = 0
+		color_counter = 0
 		for i in range(3):
 			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
 				axs[i,j].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
 				reg = TheilSenRegressor(n_jobs=-1).fit(time_weeks, sorted_topic_trends[:,k+1])
 				weekly_slope_file.write("Topic {} Slope: {:.4e}\n".format(k, reg.coef_[0]))
 				axs[i,j].plot(topic_trend_dates, reg.intercept_ + reg.coef_[0]*time_weeks.flatten(), c='r',label="Slope: {:.2e}".format(reg.coef_[0]))
-				axs[i,j].plot(topic_trend_dates, sorted_topic_trends[:,k+1], ls='-', color=color_list[k])
+				axs[i,j].plot(topic_trend_dates, sorted_topic_trends[:,k+1], ls='-', color=color_list[color_counter])
 				axs[i,j].tick_params(labelsize=18)
 				axs[i,j].tick_params(axis='x', rotation=25)
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				axs[i,j].legend(fontsize=16)
 				k+=1
+				color_counter+=1
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/weekly_theilsen.png")
 		plt.close()
@@ -216,7 +246,7 @@ if __name__ == '__main__':
 		# create dictionary tracking how frequently each topic is present per day
 		topic_multiplicity_daily = dict()
 		for key in comments_list_daily.keys():
-			topic_multiplicity_daily[key] = np.zeros(9)
+			topic_multiplicity_daily[key] = np.zeros(args.n_topics)
 			this_day_comments = comments_list_daily[key]
 			for comment in this_day_comments:
 				topic_dist = lda.get_document_topics(comment,per_word_topics=False)
@@ -238,14 +268,18 @@ if __name__ == '__main__':
 
 		fig, axs = plt.subplots(3, 3, figsize=(24,15))
 		k = 0
+		color_counter = 0
 		for i in range(3):
 			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
 				axs[i,j].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
-				axs[i,j].plot(daily_topic_trend_dates, sorted_daily_topic_trends[:,k+1], ls='-', color=color_list[k])
+				axs[i,j].plot(daily_topic_trend_dates, sorted_daily_topic_trends[:,k+1], ls='-', color=color_list[color_counter])
 				axs[i,j].tick_params(labelsize=18)
 				axs[i,j].tick_params(axis='x', rotation=25)
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
+				color_counter+=1
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/daily_trends.png")
 		plt.close()
@@ -254,16 +288,20 @@ if __name__ == '__main__':
 		daily_period_file = open("results/daily_periods.txt", "w")
 		fig, axs = plt.subplots(3, 3, figsize=(24,15))
 		k = 0
+		color_counter = 0
 		for i in range(3):
 			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
 				freqs, power_spectral_density = signal.periodogram(sorted_daily_topic_trends[:,k+1])
 				power_spectrum_idx = np.argsort(power_spectral_density)
 				daily_period_file.write("Topic {} Top Five Periods (days): ".format(k) + str(1/freqs[power_spectrum_idx][::-1][:5]) + "\n")
-				axs[i,j].semilogy(freqs, np.sqrt(power_spectral_density), color=color_list[k])
+				axs[i,j].semilogy(freqs, np.sqrt(power_spectral_density), color=color_list[color_counter])
 				axs[i,j].set_ylim([1e-1, 1e3])
 				axs[i,j].tick_params(labelsize=18)
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
+				color_counter+=1
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/daily_periodogram.png")
 		plt.close()
@@ -274,18 +312,22 @@ if __name__ == '__main__':
 		fig, axs = plt.subplots(3, 3, figsize=(24,15))
 		time_days = ((sorted_daily_topic_trends[:,0] - sorted_daily_topic_trends[0,0])/(24*3600)).reshape(-1,1)
 		k = 0
+		color_counter = 0
 		for i in range(3):
 			for j in range(3):
+				while k not in topics_sorted_by_coherence:
+					k+=1
 				axs[i,j].xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
 				reg = TheilSenRegressor(n_jobs=-1).fit(time_days, sorted_daily_topic_trends[:,k+1])
 				daily_slope_file.write("Topic {} Slope: {:.4e}\n".format(k, reg.coef_[0]))
 				axs[i,j].plot(daily_topic_trend_dates, reg.intercept_ + reg.coef_[0]*time_days.flatten(), c='r',label="Slope: {:.2e}".format(reg.coef_[0]))
-				axs[i,j].plot(daily_topic_trend_dates, sorted_daily_topic_trends[:,k+1], ls='-', color=color_list[k])
+				axs[i,j].plot(daily_topic_trend_dates, sorted_daily_topic_trends[:,k+1], ls='-', color=color_list[color_counter])
 				axs[i,j].tick_params(labelsize=18)
 				axs[i,j].tick_params(axis='x', rotation=25)
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				axs[i,j].legend(fontsize=16)
 				k+=1
+				color_counter+=1
 		plt.tight_layout(pad=3.0)
 		plt.savefig("results/daily_theilsen.png")
 		plt.close()
