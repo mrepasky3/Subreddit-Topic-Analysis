@@ -9,4 +9,5 @@ results
 *.state
 *.ipynb
 *.csv
+*.zip
 LDA_model
