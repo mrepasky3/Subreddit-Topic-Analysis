@@ -144,7 +144,7 @@ if __name__ == '__main__':
 		color_list = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple',
 					  'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 
-		fig, axs = plt.subplots(3, 3, figsize=(24,15))
+		fig, axs = plt.subplots(3, 3, sharey=True, figsize=(24,15))
 		k = 0
 		color_counter = 0
 		for i in range(3):
@@ -159,13 +159,14 @@ if __name__ == '__main__':
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
 				color_counter+=1
+		fig.text(0.0, 0.5, 'Topic Frequency', va='center', rotation='vertical',fontsize=25)
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/weekly_trends.png")
 		plt.close()
 		plt.clf()
 
 		weekly_period_file = open("results/weekly_periods.txt", "w")
-		fig, axs = plt.subplots(3, 3, figsize=(24,15))
+		fig, axs = plt.subplots(3, 3, sharey=True, figsize=(24,15))
 		k = 0
 		color_counter = 0
 		for i in range(3):
@@ -181,6 +182,7 @@ if __name__ == '__main__':
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
 				color_counter+=1
+		fig.text(0.0, 0.5, 'Topic Frequency', va='center', rotation='vertical',fontsize=25)
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/weekly_periodogram.png")
 		plt.close()
@@ -189,7 +191,7 @@ if __name__ == '__main__':
 
 
 		weekly_slope_file = open("results/weekly_slopes.txt", "w")
-		fig, axs = plt.subplots(3, 3, figsize=(24,15))
+		fig, axs = plt.subplots(3, 3, sharey=True, figsize=(24,15))
 		time_weeks = ((sorted_topic_trends[:,0] - sorted_topic_trends[0,0])/(7*24*3600)).reshape(-1,1)
 		k = 0
 		color_counter = 0
@@ -208,6 +210,7 @@ if __name__ == '__main__':
 				axs[i,j].legend(fontsize=16)
 				k+=1
 				color_counter+=1
+		fig.text(0.0, 0.5, 'Topic Frequency', va='center', rotation='vertical',fontsize=25)
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/weekly_theilsen.png")
 		plt.close()
@@ -266,7 +269,7 @@ if __name__ == '__main__':
 		color_list = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple',
 					  'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan']
 
-		fig, axs = plt.subplots(3, 3, figsize=(24,15))
+		fig, axs = plt.subplots(3, 3, sharey=True, figsize=(24,15))
 		k = 0
 		color_counter = 0
 		for i in range(3):
@@ -280,13 +283,14 @@ if __name__ == '__main__':
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
 				color_counter+=1
+		fig.text(0.0, 0.5, 'Topic Frequency', va='center', rotation='vertical',fontsize=25)
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/daily_trends.png")
 		plt.close()
 		plt.clf()
 
 		daily_period_file = open("results/daily_periods.txt", "w")
-		fig, axs = plt.subplots(3, 3, figsize=(24,15))
+		fig, axs = plt.subplots(3, 3, sharey=True, figsize=(24,15))
 		k = 0
 		color_counter = 0
 		for i in range(3):
@@ -302,6 +306,7 @@ if __name__ == '__main__':
 				axs[i,j].set_title("Topic {}".format(k), fontsize=20)
 				k+=1
 				color_counter+=1
+		fig.text(0.0, 0.5, 'Topic Frequency', va='center', rotation='vertical',fontsize=25)
 		plt.tight_layout(pad=3.0) 
 		plt.savefig("results/daily_periodogram.png")
 		plt.close()
@@ -309,7 +314,7 @@ if __name__ == '__main__':
 		daily_period_file.close()
 
 		daily_slope_file = open("results/daily_slopes.txt", "w")
-		fig, axs = plt.subplots(3, 3, figsize=(24,15))
+		fig, axs = plt.subplots(3, 3, sharey=True, figsize=(24,15))
 		time_days = ((sorted_daily_topic_trends[:,0] - sorted_daily_topic_trends[0,0])/(24*3600)).reshape(-1,1)
 		k = 0
 		color_counter = 0
@@ -328,6 +333,7 @@ if __name__ == '__main__':
 				axs[i,j].legend(fontsize=16)
 				k+=1
 				color_counter+=1
+		fig.text(0.0, 0.5, 'Topic Frequency', va='center', rotation='vertical',fontsize=25)
 		plt.tight_layout(pad=3.0)
 		plt.savefig("results/daily_theilsen.png")
 		plt.close()
