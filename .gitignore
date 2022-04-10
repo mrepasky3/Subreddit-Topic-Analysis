@@ -8,4 +8,6 @@ results
 *.id2word
 *.state
 *.ipynb
+*.csv
+*.zip
 LDA_model
