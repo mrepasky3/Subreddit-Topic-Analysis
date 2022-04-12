@@ -19,8 +19,9 @@ parser.add_argument('--stackplot', action="store_true")
 parser.add_argument('--gridplot', action="store_true")
 parser.add_argument('--partial_corr', action="store_true")
 parser.add_argument('--partial_corr_full', action="store_true")
-parser.add_argument('--full_corr_target', type=int)
+parser.add_argument('--target_index', type=int)
 parser.add_argument('--VAR', action="store_true")
+parser.add_argument('--pcf_type', type=str, default='full', choices=['full', 'individual'])
 parser.set_defaults(feature=False)
 
 
@@ -234,7 +235,7 @@ def partial_correlation_allfields(target_index, full_data, lags=50, write=False,
 	return pcf, pvals
 
 
-def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, train_split=250, mode='all'):
+def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, train_split=250, mode='all', pcf_type='individual'):
 	'''
 	Using partial correlation results, construct a vector
 	autoregression model that uses the coefficients with
@@ -258,6 +259,9 @@ def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, tr
 		only the same time series if 'auto',
 		and use everything except the same
 		time series if 'nonauto'
+	pcf_type : str
+		indicates which type of pvalue table input is
+		being used ('individual' or 'full')
 
 	Returns
 	-------
@@ -273,15 +277,18 @@ def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, tr
 		testing portion of target topic frequency
 	y_pred : pandas Series
 		test prediction of the trained model
-	mae_test : float
-		mean absolute error of the test prediction
+	mape_test : float
+		mean absolute percentage error of the test prediction
 	'''
 
-	target_pvals = []
-	for i in range(pval_table.shape[1]):
-		if int(pval_table.columns[i].split()[-1]) == target_index:
-			target_pvals.append(pval_table.iloc[:,i])
-	target_pvals = pd.DataFrame(target_pvals).T
+	if pcf_type == "individual":
+		target_pvals = []
+		for i in range(pval_table.shape[1]):
+			if int(pval_table.columns[i].split()[-1]) == target_index:
+				target_pvals.append(pval_table.iloc[:,i])
+		target_pvals = pd.DataFrame(target_pvals).T
+	elif pcf_type == "full":
+		target_pvals = pval_table.copy()
 
 	
 	target_lags = []
@@ -319,9 +326,12 @@ def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, tr
 	results = model.fit()
 	
 	y_pred = results.predict(X_test)
-	mae_test = np.mean(np.abs(y_pred - regression_df.iloc[train_split:,-1]))
+	mape_test = np.array(np.abs(y_pred - regression_df.iloc[train_split:,-1]))
+	nonzero_idx = np.array(regression_df.iloc[train_split:,-1]) != 0
+	mape_test = mape_test[nonzero_idx] / np.array(regression_df.iloc[train_split:,-1])[nonzero_idx]
+	mape_test = 100*mape_test.mean()
 	
-	return results, X_train, X_test, regression_df.iloc[:train_split,-1], regression_df.iloc[train_split:,-1], y_pred, mae_test
+	return results, X_train, X_test, regression_df.iloc[:train_split,-1], regression_df.iloc[train_split:,-1], y_pred, mape_test
 
 
 
@@ -338,13 +348,6 @@ if __name__ == '__main__':
 		daily_topic_freqs = np.load("results/lda_daily_trends.npy")
 		daily_topic_df = pd.DataFrame(daily_topic_freqs[:,1:])
 		dates = [dt.datetime.fromtimestamp(stamp) for stamp in daily_topic_freqs[:,0]]
-
-		try:
-			pcf_table = pd.read_csv("results/lda_partial_corr_table.csv")
-			pval_table = pd.read_csv("results/lda_pval_table.csv")
-		except:
-			pass
-
 
 	if args.stackplot:
 		generate_stackplot(dates, daily_topic_freqs, savename=args.topic_model + "_daily")
@@ -378,30 +381,111 @@ if __name__ == '__main__':
 
 
 	if args.partial_corr_full:
-		target_idx = args.full_corr_target
+		target_idx = args.target_index
 		partial_correlation_allfields(target_idx, daily_topic_df, write=True, topic_model=args.topic_model)
 
 
 	if args.VAR:
-		os.mkdir("results/{}_VAR/".format(args.topic_model))
-		report_file = open("results/{}_VAR/results.txt".format(args.topic_model))
-		for i in range(pval_table.shape[1]):
-			res, X_train, X_test, y_train, y_test, y_pred, mae_test = vector_autoregression(daily_topic_df, i, pval_table.iloc[:100,:],
-				signif=0.05, train_split=200, mode='all')
+		if not os.path.exists("results/{}_VAR/".format(args.topic_model)):
+			os.mkdir("results/{}_VAR/".format(args.topic_model))
 
-			report_file.write("Target {}\nF p-value {:.2e}\nR^2 {:.2f}\n".format(i, res.f_pvalue, res.rsquared))
-			report_file.write("Test MAE {:.2e}\nNum Params {}\nNum_Significant {}".format(mae_test, len(res.params), (res.pvalues < 0.05).sum()))
+		if args.pcf_type == 'individual':
+			if not os.path.exists("results/{}_VAR/individual/".format(args.topic_model)):
+				os.mkdir("results/{}_VAR/individual/".format(args.topic_model))
+			report_file = open("results/{}_VAR/individual/results.txt".format(args.topic_model), 'w')
+			pval_table = pd.read_csv("results/{}_pval_table.csv".format(args.topic_model))
+			
+			for target_index in range(args.n_topics):
+				print("TOPIC {}".format(target_index))
+				train_split = 400
+				mape_vals = []
+				for p in np.arange(0.05, 1., 0.05):
+					res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:100,:],
+						signif=p, train_split=train_split, mode='all')
+					mape_vals.append(mape_test)
 
-			preds = res.get_prediction(pd.concat([X_train,X_test]))
+				signif = np.arange(0.05, 1., 0.05)[np.argmin(mape_vals)]
+				res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:100,:],
+						signif=signif, train_split=train_split, mode='all')
 
-			fig = plt.figure(figsize=(15,5))
+				report_file.write("Target {}\nF p-value {:.2e}\nR^2 {:.2f}\n".format(target_index, res.f_pvalue, res.rsquared))
+				report_file.write("Best signif: {}\nTest MAPE {:2.1f}\nNum Params {}\nNum_Significant {}\n\n".format(signif, mape_test, len(res.params), (res.pvalues < 0.05).sum()))
 
-			plt.plot(y_train, color='k')
-			plt.plot(y_test, color='k')
-			plt.axvline(200, color='red')
+				preds = res.get_prediction(pd.concat([X_train,X_test]))
+				pred_result = preds.summary_frame()
 
-			plt.plot(preds.summary_frame()['mean'], ls='--', color='r')
-			plt.fill_between(range(len(preds.summary_frame()['mean'])),
-							 preds.summary_frame()['mean_ci_lower'], preds.summary_frame()['mean_ci_upper'], color='r', alpha=.1)
+				fig = plt.figure(figsize=(15,5))
 
-			plt.show()
+				plt.plot(dates[-(y_train.shape[0] + y_test.shape[0]):-y_test.shape[0]], y_train, color='k', label="Measured Frequency")
+				plt.plot(dates[-y_test.shape[0]:], y_test, color='k')
+
+				plt.plot(dates[(len(dates) - pred_result['mean'].shape[0]):], pred_result['mean'],
+					ls='--', color='r', label="Predicted Frequency")
+				plt.fill_between(dates[(len(dates) - pred_result['mean'].shape[0]):],
+					pred_result['mean_ci_lower'], pred_result['mean_ci_upper'], color='r', alpha=.1, label="95% Confidence Interval")
+
+				plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
+
+				plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
+				plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
+				plt.xlabel('Date', fontsize=16)
+				plt.ylabel('Topic Proportion', fontsize=16)
+				plt.tick_params(labelsize=12)
+				plt.tick_params(axis='x', rotation=25)
+
+				plt.legend(fontsize=12)
+				plt.tight_layout()
+				plt.savefig("results/{}_VAR/individual/Target_{}.png".format(args.topic_model, target_index))
+				plt.close()
+				plt.clf()
+
+		elif args.pcf_type == "full":
+			if not os.path.exists("results/{}_VAR/full/".format(args.topic_model)):
+				os.mkdir("results/{}_VAR/full/".format(args.topic_model))
+			report_file = open("results/{}_VAR/full/results.txt".format(args.topic_model), 'w')
+			
+			for target_index in range(args.n_topics):
+				print("TOPIC {}".format(target_index))
+				pval_table = pd.read_csv("results/{}_topic{}_fulldata_pval_table.csv".format(args.topic_model, target_index))
+				
+				train_split = 400
+				mape_vals = []
+				for p in np.arange(0.05, 1., 0.05):
+					res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:,1:].dropna(),
+						signif=p, train_split=train_split, mode='all', pcf_type='full')
+					mape_vals.append(mape_test)
+
+				signif = np.arange(0.05, 1., 0.05)[np.argmin(mape_vals)]
+				res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:,1:].dropna(),
+						signif=signif, train_split=train_split, mode='all', pcf_type='full')
+
+				report_file.write("Target {}\nF p-value {:.2e}\nR^2 {:.2f}\n".format(target_index, res.f_pvalue, res.rsquared))
+				report_file.write("Best signif: {}\nTest MAPE {:2.1f}\nNum Params {}\nNum_Significant {}\n\n".format(signif, mape_test, len(res.params), (res.pvalues < 0.05).sum()))
+
+				preds = res.get_prediction(pd.concat([X_train,X_test]))
+				pred_result = preds.summary_frame()
+
+				fig = plt.figure(figsize=(15,5))
+
+				plt.plot(dates[-(y_train.shape[0] + y_test.shape[0]):-y_test.shape[0]], y_train, color='k', label="Measured Frequency")
+				plt.plot(dates[-y_test.shape[0]:], y_test, color='k')
+
+				plt.plot(dates[(len(dates) - pred_result['mean'].shape[0]):], pred_result['mean'],
+					ls='--', color='r', label="Predicted Frequency")
+				plt.fill_between(dates[(len(dates) - pred_result['mean'].shape[0]):],
+					pred_result['mean_ci_lower'], pred_result['mean_ci_upper'], color='r', alpha=.1, label="95% Confidence Interval")
+
+				plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
+
+				plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
+				plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
+				plt.xlabel('Date', fontsize=16)
+				plt.ylabel('Topic Proportion', fontsize=16)
+				plt.tick_params(labelsize=12)
+				plt.tick_params(axis='x', rotation=25)
+
+				plt.legend(fontsize=12)
+				plt.tight_layout()
+				plt.savefig("results/{}_VAR/full/Target_{}.png".format(args.topic_model, target_index))
+				plt.close()
+				plt.clf()
