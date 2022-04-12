@@ -4,14 +4,17 @@ import matplotlib.pyplot as plt
 import matplotlib.dates
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import pacf
+from gensim.models import CoherenceModel
 import pandas as pd
 import numpy as np
 import datetime as dt
 from tqdm import tqdm
+from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_topics', type=int, default=15)
 parser.add_argument('--topic_model', type=str, default='lda', choices=['lda', 'nmf', 'transformer'])
+parser.add_argument('--create_time_series', action="store_true")
 parser.add_argument('--stackplot', action="store_true")
 parser.add_argument('--gridplot', action="store_true")
 parser.add_argument('--partial_corr', action="store_true")
@@ -19,6 +22,35 @@ parser.add_argument('--partial_corr_full', action="store_true")
 parser.add_argument('--full_corr_target', type=int)
 parser.add_argument('--VAR', action="store_true")
 parser.set_defaults(feature=False)
+
+
+def create_time_series_file(topic_model, n_topics=15):
+	'''
+	Pull all training data, convert to BoW representations of
+	each comment, recording the bigram model, trigram model,
+	and dictionary. Load the fit topic model, and call teh
+	utility function which generates the file on the training
+	plus holdout data using these components.
+
+	Parameters
+	----------
+	topic_model : str
+		string indicator for which topic model to load
+	n_topics : int
+		number of topics fit by the topic model
+	'''
+
+	comments_list = []
+	for data_file in os.listdir('weekly_data'):
+	    loaded_comments = pd.read_csv('weekly_data/' + data_file)
+	    comments_list += list(loaded_comments['body'])
+
+	comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
+	comments_bow, dictionary = create_dictionary(comments_words)
+
+	if topic_model == "lda":
+		lda = gensim.models.LdaModel.load("results/LDA_model")
+		generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=True, n_topics=n_topics)
 
 
 def generate_stackplot(dates, topic_freqs, savename):
@@ -36,7 +68,8 @@ def generate_stackplot(dates, topic_freqs, savename):
 	savename : str
 		name for saving the image in the results folder
 	'''
-	fig = plt.figure(figsize=(25,10))
+
+	fig = plt.figure(figsize=(25,12))
 	plt.axvspan(dates[0], dates[-1], color='black')
 	plt.stackplot(dates, topic_freqs[:,1:].T, labels=["Topic "+str(k) for k in range(topic_freqs.shape[1]-1)], zorder=3)
 
@@ -69,6 +102,7 @@ def generate_gridplot(dates, topic_freqs, savename):
 	savename : str
 		name for saving the image in the results folder
 	'''
+
 	color_list = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
 			  'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan',
 			  'chartreuse', 'dodgerblue', 'indigo', 'blue', 'teal']
@@ -114,6 +148,7 @@ def partial_correlation(feature_series, target_series, lags=365):
 	pvals : list of float
 		p-value for the correlation calculations
 	'''
+
 	pcf = []
 	pvals = []
 	data_df = pd.DataFrame([feature_series, target_series]).T
@@ -163,6 +198,7 @@ def partial_correlation_allfields(target_index, full_data, lags=50, write=False,
 	pvals : list of float
 		p-value for the correlation calculations
 	'''
+
 	pcf = []
 	pvals = []
 	if write:
@@ -293,6 +329,10 @@ def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, tr
 if __name__ == '__main__':
 	
 	args = parser.parse_args()
+
+	if args.create_time_series:
+		create_time_series_file(args.topic_model, n_topics=args.n_topics)
+
 
 	if args.topic_model == 'lda':
 		daily_topic_freqs = np.load("results/lda_daily_trends.npy")

@@ -169,7 +169,7 @@ def create_dictionary(comments_words):
 	return comments_bow, dictionary
 
 
-def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=False):
+def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=False, n_topics=15):
 	'''
 	Given fit LDA, n-gram models, and dictionary, gather all the
 	data, convert to BoW representations of each comment made in
@@ -202,13 +202,22 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 		belonging to each topic for each corresponding day as each
 		of the remaining columns
 	'''
+	
 	full_dataframe = pd.DataFrame()
 	for data_file in os.listdir('weekly_data'):
 	    loaded_comments = pd.read_csv('weekly_data/' + data_file)
 	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
 
+	for data_file in os.listdir('hold_out_data'):
+	    loaded_comments = pd.read_csv('hold_out_data/' + data_file)
+	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+
 	# determine the beginning and end time of the data
 	start_dates = []
+	for data_file in os.listdir('hold_out_data'):
+	    start = data_file.split('-')[0][-10:]
+	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+	    start_dates.append(start_time)
 	for data_file in os.listdir('weekly_data'):
 	    start = data_file.split('-')[0][-10:]
 	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
@@ -233,7 +242,7 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 	# create dictionary tracking how frequently each topic is present per day
 	topic_multiplicity_daily = dict()
 	for key in comments_list_daily.keys():
-	    topic_multiplicity_daily[key] = np.zeros(15)
+	    topic_multiplicity_daily[key] = np.zeros(n_topics)
 	    this_day_comments = comments_list_daily[key]
 	    for comment in this_day_comments:
 	        topic_dist = lda.get_document_topics(comment,per_word_topics=False)
