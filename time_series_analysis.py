@@ -339,8 +339,11 @@ if __name__ == '__main__':
 		daily_topic_df = pd.DataFrame(daily_topic_freqs[:,1:])
 		dates = [dt.datetime.fromtimestamp(stamp) for stamp in daily_topic_freqs[:,0]]
 
-		pcf_table = pd.read_csv("results/lda_partial_corr_table.csv")
-		pval_table = pd.read_csv("results/lda_pval_table.csv")
+		try:
+			pcf_table = pd.read_csv("results/lda_partial_corr_table.csv")
+			pval_table = pd.read_csv("results/lda_pval_table.csv")
+		except:
+			pass
 
 
 	if args.stackplot:
@@ -353,8 +356,8 @@ if __name__ == '__main__':
 
 	if args.partial_corr:
 		n_topics = daily_topic_df.shape[1]
-		partial_corr_table = np.zeros((200-1,n_topics**2))
-		pval_table = np.zeros((200-1,n_topics**2))
+		partial_corr_table = np.zeros((365-1,n_topics**2))
+		pval_table = np.zeros((365-1,n_topics**2))
 		titles = []
 		
 		iteration = 0
@@ -366,6 +369,8 @@ if __name__ == '__main__':
 				titles.append("Feature {} Target {}".format(k1, k2))
 				partial_corr_table[:,iteration] = pcf
 				pval_table[:,iteration] = pvals
+				if iteration % 5 == 0:
+					print("ITERATION {}".format(iteration))
 				iteration+=1
 
 		pd.DataFrame(partial_corr_table,columns=titles).to_csv("results/"+args.topic_model+"_partial_corr_table.csv", index=False)
