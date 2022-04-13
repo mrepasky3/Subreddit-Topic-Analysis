@@ -19,6 +19,7 @@ parser.add_argument('--stackplot', action="store_true")
 parser.add_argument('--gridplot', action="store_true")
 parser.add_argument('--partial_corr', action="store_true")
 parser.add_argument('--partial_corr_full', action="store_true")
+parser.add_argument('--top_corr_table', action='store_true')
 parser.add_argument('--target_index', type=int)
 parser.add_argument('--VAR', action="store_true")
 parser.add_argument('--pcf_type', type=str, default='full', choices=['full', 'individual'])
@@ -235,6 +236,40 @@ def partial_correlation_allfields(target_index, full_data, lags=50, write=False,
 	return pcf, pvals
 
 
+def report_top_corr(target_index, pval_table, pcf_table, signif=0.05, pcf_type='individual'):
+
+	if pcf_type == "individual":
+		target_pvals = []
+		target_pcfs = []
+		for i in range(pval_table.shape[1]):
+			if int(pval_table.columns[i].split()[-1]) == target_index:
+				target_pvals.append(pval_table.iloc[:,i])
+				target_pcfs.append(pcf_table.iloc[:,i])
+		target_pvals = pd.DataFrame(target_pvals).T
+		target_pcfs = pd.DataFrame(target_pcfs).T
+
+	elif pcf_type == "full":
+		target_pvals = pval_table.copy()
+		target_pcfs = pcf_table.copy()
+
+	target_lags = []
+	significant_pcfs = []
+	significant_pvals = []
+	for i in range(target_pvals.shape[1]):
+		indices = np.array(target_pvals.index[target_pvals.iloc[:,i]<signif])
+		if len(indices) != 0:
+			target_lags += list(np.char.add(np.array(["Topic {} Lag ".format(i)] * indices.shape[0]),
+				np.array(indices+1, dtype=str)))
+			significant_pcfs += list(target_pcfs.iloc[indices, i])
+			significant_pvals += list(target_pvals.iloc[indices, i])
+
+	sorted_indices = np.argsort(np.abs(significant_pcfs))[::-1]
+	top_pcfs = np.array(significant_pcfs)[sorted_indices[:10]]
+	top_pvals = np.array(significant_pvals)[sorted_indices[:10]]
+	top_lags = np.array(target_lags)[sorted_indices[:10]]
+	return top_pcfs, top_lags, top_pvals
+
+
 def vector_autoregression(topic_freqs, target_index, pval_table, signif=0.05, train_split=250, mode='all', pcf_type='individual'):
 	'''
 	Using partial correlation results, construct a vector
@@ -385,6 +420,47 @@ if __name__ == '__main__':
 		partial_correlation_allfields(target_idx, daily_topic_df, write=True, topic_model=args.topic_model)
 
 
+	if args.top_corr_table:
+
+		if args.pcf_type == 'individual':
+			top_corr_list = []
+			top_pval_list = []
+
+			pval_table = pd.read_csv("results/{}_pval_table.csv".format(args.topic_model))
+			pcf_table = pd.read_csv("results/{}_partial_corr_table.csv".format(args.topic_model))
+
+			for target_index in range(args.n_topics):				
+				top_pcfs, top_lags, top_pvals = report_top_corr(target_index, pval_table, pcf_table, signif=0.05, pcf_type='individual')
+				
+				pcf_series = pd.Series([top_lags[i] + " / {:.3f}".format(top_pcfs[i]) for i in range(top_pcfs.shape[0])], name='Topic {}'.format(target_index))
+				top_corr_list.append(pcf_series)
+
+				pval_series = pd.Series(top_pvals, name='Topic {}'.format(target_index))
+				top_pval_list.append(pval_series)
+
+			pd.concat(top_corr_list,axis=1).to_csv("results/"+args.topic_model+"_individual_top_partial_corrs.csv", index=False)
+			pd.concat(top_pval_list,axis=1).to_csv("results/"+args.topic_model+"_individual_top_pvals.csv", index=False)
+
+		elif args.pcf_type == 'full':
+			top_corr_list = []
+			top_pval_list = []
+			for target_index in range(args.n_topics):
+				pval_table = pd.read_csv("results/{}_topic{}_fulldata_pval_table.csv".format(args.topic_model, target_index))
+				pcf_table = pd.read_csv("results/{}_topic{}_fulldata_partial_corr_table.csv".format(args.topic_model, target_index))
+				
+				top_pcfs, top_lags, top_pvals = report_top_corr(target_index, pval_table.iloc[:,1:].dropna(),
+					pcf_table.iloc[:,1:].dropna(), signif=0.05, pcf_type='full')
+				
+				pcf_series = pd.Series([top_lags[i] + " / {:.3f}".format(top_pcfs[i]) for i in range(top_pcfs.shape[0])], name='Topic {}'.format(target_index))
+				top_corr_list.append(pcf_series)
+
+				pval_series = pd.Series(top_pvals, name='Topic {}'.format(target_index))
+				top_pval_list.append(pval_series)
+
+			pd.concat(top_corr_list,axis=1).to_csv("results/"+args.topic_model+"_fulldata_top_partial_corrs.csv", index=False)
+			pd.concat(top_pval_list,axis=1).to_csv("results/"+args.topic_model+"_fulldata_top_pvals.csv", index=False)
+
+
 	if args.VAR:
 		if not os.path.exists("results/{}_VAR/".format(args.topic_model)):
 			os.mkdir("results/{}_VAR/".format(args.topic_model))
@@ -397,15 +473,16 @@ if __name__ == '__main__':
 			
 			for target_index in range(args.n_topics):
 				print("TOPIC {}".format(target_index))
-				train_split = 400
-				mape_vals = []
-				for p in np.arange(0.05, 1., 0.05):
-					res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:100,:],
-						signif=p, train_split=train_split, mode='all')
-					mape_vals.append(mape_test)
+				train_split = 300
+				
+				# mape_vals = []
+				# for p in np.arange(0.05, 1., 0.05):
+				# 	res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:100,:],
+				# 		signif=p, train_split=train_split, mode='all')
+				# 	mape_vals.append(mape_test)
 
-				signif = np.arange(0.05, 1., 0.05)[np.argmin(mape_vals)]
-				res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:100,:],
+				signif = 0.01#np.arange(0.05, 1., 0.05)[np.argmin(mape_vals)]
+				res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:,:],
 						signif=signif, train_split=train_split, mode='all')
 
 				report_file.write("Target {}\nF p-value {:.2e}\nR^2 {:.2f}\n".format(target_index, res.f_pvalue, res.rsquared))
@@ -447,15 +524,15 @@ if __name__ == '__main__':
 			for target_index in range(args.n_topics):
 				print("TOPIC {}".format(target_index))
 				pval_table = pd.read_csv("results/{}_topic{}_fulldata_pval_table.csv".format(args.topic_model, target_index))
-				
 				train_split = 400
-				mape_vals = []
-				for p in np.arange(0.05, 1., 0.05):
-					res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:,1:].dropna(),
-						signif=p, train_split=train_split, mode='all', pcf_type='full')
-					mape_vals.append(mape_test)
+				
+				# mape_vals = []
+				# for p in np.arange(0.05, 1., 0.05):
+				# 	res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:,1:].dropna(),
+				# 		signif=p, train_split=train_split, mode='all', pcf_type='full')
+				# 	mape_vals.append(mape_test)
 
-				signif = np.arange(0.05, 1., 0.05)[np.argmin(mape_vals)]
+				signif = 0.05#np.arange(0.05, 1., 0.05)[np.argmin(mape_vals)]
 				res, X_train, X_test, y_train, y_test, y_pred, mape_test = vector_autoregression(daily_topic_df, target_index, pval_table.iloc[:,1:].dropna(),
 						signif=signif, train_split=train_split, mode='all', pcf_type='full')
 
