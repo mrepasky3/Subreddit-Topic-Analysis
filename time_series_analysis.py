@@ -153,15 +153,21 @@ def partial_correlation(feature_series, target_series, lags=182):
 
 	pcf = []
 	pvals = []
-	data_df = pd.DataFrame([feature_series, target_series]).T
+	data_df = pd.DataFrame([target_series]).T
 	for i in tqdm(range(1,lags)):
 		this_dataframe = data_df.copy()
 		for j in range(i):
-			this_dataframe = pd.concat([feature_series.copy().shift(j+1), target_series.copy().shift(j+1), this_dataframe], axis=1)
+			if feature_series.name == target_series.name:
+				this_dataframe = pd.concat([feature_series.copy().shift(j+1), this_dataframe], axis=1)
+			else:
+				this_dataframe = pd.concat([feature_series.copy().shift(j+1), target_series.copy().shift(j+1), this_dataframe], axis=1)
 		this_dataframe = this_dataframe.dropna().reset_index(drop=True)
 		colnames = []
-		for lag in np.arange(0,i+1)[::-1]:
-			colnames += [str(feature_series.name) + " Lag {}".format(lag), str(target_series.name) + " Lag {}".format(lag)]
+		for lag in np.arange(1,i+1)[::-1]:
+			if feature_series.name == target_series.name:
+				colnames += [str(feature_series.name) + " Lag {}".format(lag)]
+			else:
+				colnames += [str(feature_series.name) + " Lag {}".format(lag), str(target_series.name) + " Lag {}".format(lag)]
 		colnames += [target_series.name]
 		this_dataframe.columns = colnames
 		
@@ -398,8 +404,8 @@ if __name__ == '__main__':
 
 	if args.partial_corr:
 		n_topics = daily_topic_df.shape[1]
-		partial_corr_table = np.zeros((365-1,n_topics**2))
-		pval_table = np.zeros((365-1,n_topics**2))
+		partial_corr_table = np.zeros((182-1,n_topics**2))
+		pval_table = np.zeros((182-1,n_topics**2))
 		titles = []
 		
 		iteration = 0
