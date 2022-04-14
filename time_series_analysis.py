@@ -127,7 +127,7 @@ def generate_gridplot(dates, topic_freqs, savename):
 	plt.clf()
 
 
-def partial_correlation(feature_series, target_series, lags=365):
+def partial_correlation(feature_series, target_series, lags=182):
 	'''
 	Calculate the partial correlation between the target
 	series and the various lags of the feature series. "Partial"
@@ -157,9 +157,13 @@ def partial_correlation(feature_series, target_series, lags=365):
 	for i in tqdm(range(1,lags)):
 		this_dataframe = data_df.copy()
 		for j in range(i):
-			this_dataframe = pd.concat([feature_series.copy().shift(j+1), this_dataframe], axis=1)
+			this_dataframe = pd.concat([feature_series.copy().shift(j+1), target_series.copy().shift(j+1), this_dataframe], axis=1)
 		this_dataframe = this_dataframe.dropna().reset_index(drop=True)
-		this_dataframe.columns = [str(feature_series.name) + " Lag {}".format(lag) for lag in np.arange(0,i+1)[::-1]] + [target_series.name]
+		colnames = []
+		for lag in np.arange(0,i+1)[::-1]:
+			colnames += [str(feature_series.name) + " Lag {}".format(lag), str(target_series.name) + " Lag {}".format(lag)]
+		colnames += [target_series.name]
+		this_dataframe.columns = colnames
 		
 		X = this_dataframe.iloc[:,0:-1]
 		X = sm.add_constant(X)
