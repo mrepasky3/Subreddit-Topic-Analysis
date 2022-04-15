@@ -11,6 +11,8 @@ import datetime as dt
 from tqdm import tqdm
 from utils import *
 
+import pickle
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_topics', type=int, default=15)
 parser.add_argument('--topic_model', type=str, default='lda', choices=['lda', 'nmf', 'ctm'])
@@ -64,7 +66,8 @@ def create_time_series_file(topic_model, n_topics=15):
 		with open("results/CTM_Model/tmdp.pkl", "rb") as f:
 			tp = pickle.load(f)
 
-		ctm.load(models_dir="results/CTM_Model/",epoch=596)
+		with open("results/CTM_Model/ctm.pkl", "rb") as f:
+  			ctm = pickle.load(f)
 		generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=n_topics)
 
 

@@ -174,54 +174,54 @@ def create_dictionary(comments_words):
 
 
 class WhiteSpacePreprocessing():
-    """
-    Slightly adapted from https://github.com/MilaNLProc/contextualized-topic-models
-    Provides a very simple preprocessing script that filters infrequent tokens from text
-    """
+	"""
+	Slightly adapted from https://github.com/MilaNLProc/contextualized-topic-models
+	Provides a very simple preprocessing script that filters infrequent tokens from text
+	"""
 
-    def __init__(self, stopwords_language="english", vocabulary_size=2000):
-        """
-        :param documents: list of strings
-        :param stopwords_language: string of the language of the stopwords (see nltk stopwords)
-        :param vocabulary_size: the number of most frequent words to include in the documents. Infrequent words will be discarded from the list of preprocessed documents
-        """
-        self.stopwords = set(stopwords.words(stopwords_language))
-        self.vocabulary_size = vocabulary_size
-        self.max_df = 1.0
+	def __init__(self, stopwords_language="english", vocabulary_size=2000):
+		"""
+		:param documents: list of strings
+		:param stopwords_language: string of the language of the stopwords (see nltk stopwords)
+		:param vocabulary_size: the number of most frequent words to include in the documents. Infrequent words will be discarded from the list of preprocessed documents
+		"""
+		self.stopwords = set(stopwords.words(stopwords_language))
+		self.vocabulary_size = vocabulary_size
+		self.max_df = 1.0
 
-    def preprocess(self, documents, keep_fit=False):
-        """
-        Note that if after filtering some documents do not contain words we remove them. That is why we return also the
-        list of unpreprocessed documents.
-        :return: preprocessed documents, unpreprocessed documents and the vocabulary list
-        """
-        preprocessed_docs_tmp = documents
-        preprocessed_docs_tmp = [deaccent(doc.lower()) for doc in preprocessed_docs_tmp]
-        preprocessed_docs_tmp = [doc.translate(
-            str.maketrans(string.punctuation, ' ' * len(string.punctuation))) for doc in preprocessed_docs_tmp]
-        preprocessed_docs_tmp = [' '.join([w for w in doc.split() if len(w) > 0 and w not in self.stopwords])
-                                 for doc in preprocessed_docs_tmp]
+	def preprocess(self, documents, keep_fit=False):
+		"""
+		Note that if after filtering some documents do not contain words we remove them. That is why we return also the
+		list of unpreprocessed documents.
+		:return: preprocessed documents, unpreprocessed documents and the vocabulary list
+		"""
+		preprocessed_docs_tmp = documents
+		preprocessed_docs_tmp = [deaccent(doc.lower()) for doc in preprocessed_docs_tmp]
+		preprocessed_docs_tmp = [doc.translate(
+			str.maketrans(string.punctuation, ' ' * len(string.punctuation))) for doc in preprocessed_docs_tmp]
+		preprocessed_docs_tmp = [' '.join([w for w in doc.split() if len(w) > 0 and w not in self.stopwords])
+								 for doc in preprocessed_docs_tmp]
 
-        if not keep_fit:
-	        self.vectorizer = CountVectorizer(max_features=self.vocabulary_size, max_df=self.max_df)
-	        self.vectorizer.fit_transform(preprocessed_docs_tmp)
-	        self.temp_vocabulary = set(self.vectorizer.get_feature_names())
+		if not keep_fit:
+			self.vectorizer = CountVectorizer(max_features=self.vocabulary_size, max_df=self.max_df)
+			self.vectorizer.fit_transform(preprocessed_docs_tmp)
+			self.temp_vocabulary = set(self.vectorizer.get_feature_names())
 
-        preprocessed_docs_tmp = [' '.join([w for w in doc.split() if w in self.temp_vocabulary])
-                                 for doc in preprocessed_docs_tmp]
+		preprocessed_docs_tmp = [' '.join([w for w in doc.split() if w in self.temp_vocabulary])
+								 for doc in preprocessed_docs_tmp]
 
-        # the size of the preprocessed or unpreprocessed_docs might be less than given docs
-        # for that reason, we need to return retained indices to change the shape of given custom embeddings.
-        preprocessed_docs, unpreprocessed_docs, retained_indices = [], [], []
-        for i, doc in enumerate(preprocessed_docs_tmp):
-            if len(doc) > 0:
-                preprocessed_docs.append(doc)
-                unpreprocessed_docs.append(documents[i])
-                retained_indices.append(i)
+		# the size of the preprocessed or unpreprocessed_docs might be less than given docs
+		# for that reason, we need to return retained indices to change the shape of given custom embeddings.
+		preprocessed_docs, unpreprocessed_docs, retained_indices = [], [], []
+		for i, doc in enumerate(preprocessed_docs_tmp):
+			if len(doc) > 0:
+				preprocessed_docs.append(doc)
+				unpreprocessed_docs.append(documents[i])
+				retained_indices.append(i)
 
-        vocabulary = list(set([item for doc in preprocessed_docs for item in doc.split()]))
+		vocabulary = list(set([item for doc in preprocessed_docs for item in doc.split()]))
 
-        return preprocessed_docs, unpreprocessed_docs, vocabulary
+		return preprocessed_docs, unpreprocessed_docs, vocabulary
 
 
 def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=False, n_topics=15):
@@ -262,23 +262,23 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 	
 	full_dataframe = pd.DataFrame()
 	for data_file in os.listdir('weekly_data'):
-	    loaded_comments = pd.read_csv('weekly_data/' + data_file)
-	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+		loaded_comments = pd.read_csv('weekly_data/' + data_file)
+		full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
 
 	for data_file in os.listdir('hold_out_data'):
-	    loaded_comments = pd.read_csv('hold_out_data/' + data_file)
-	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+		loaded_comments = pd.read_csv('hold_out_data/' + data_file)
+		full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
 
 	# determine the beginning and end time of the data
 	start_dates = []
 	for data_file in os.listdir('hold_out_data'):
-	    start = data_file.split('-')[0][-10:]
-	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
-	    start_dates.append(start_time)
+		start = data_file.split('-')[0][-10:]
+		start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+		start_dates.append(start_time)
 	for data_file in os.listdir('weekly_data'):
-	    start = data_file.split('-')[0][-10:]
-	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
-	    start_dates.append(start_time)
+		start = data_file.split('-')[0][-10:]
+		start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+		start_dates.append(start_time)
 	start_dates = np.array(start_dates)
 	sorted_idx = np.argsort(start_dates)
 	sorted_start_dates = start_dates[sorted_idx]
@@ -289,30 +289,30 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 	start_datetime = topic_trend_dates[0]
 	comments_list_daily = dict()
 	for i in range(num_days):
-	    this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
-	    this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
-	    loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
-	    tokenized_loaded_comments, _, _ = tokenize_lda(data_cleaning(loaded_comments), bigram_model=bigram_model, trigram_model=trigram_model)
-	    bow_loaded_comments = [dictionary.doc2bow(comment) for comment in tokenized_loaded_comments]
-	    comments_list_daily[this_start] = bow_loaded_comments
+		this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
+		this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
+		loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
+		tokenized_loaded_comments, _, _ = tokenize_lda(data_cleaning(loaded_comments), bigram_model=bigram_model, trigram_model=trigram_model)
+		bow_loaded_comments = [dictionary.doc2bow(comment) for comment in tokenized_loaded_comments]
+		comments_list_daily[this_start] = bow_loaded_comments
 
 	# create dictionary tracking how frequently each topic is present per day
 	topic_multiplicity_daily = dict()
 	for key in comments_list_daily.keys():
-	    topic_multiplicity_daily[key] = np.zeros(n_topics)
-	    this_day_comments = comments_list_daily[key]
-	    for comment in this_day_comments:
-	        topic_dist = lda.get_document_topics(comment,per_word_topics=False)
-	        top_topic_idx = np.argmax(np.array(topic_dist)[:,1])
-	        top_topic = topic_dist[top_topic_idx][0]
-	        topic_multiplicity_daily[key][top_topic] += 1
-	    if len(this_day_comments) != 0 :
-	    	topic_multiplicity_daily[key] /= len(this_day_comments)
+		topic_multiplicity_daily[key] = np.zeros(n_topics)
+		this_day_comments = comments_list_daily[key]
+		for comment in this_day_comments:
+			topic_dist = lda.get_document_topics(comment,per_word_topics=False)
+			top_topic_idx = np.argmax(np.array(topic_dist)[:,1])
+			top_topic = topic_dist[top_topic_idx][0]
+			topic_multiplicity_daily[key][top_topic] += 1
+		if len(this_day_comments) != 0 :
+			topic_multiplicity_daily[key] /= len(this_day_comments)
 
 	# transform this dictionary into a sorted array
 	daily_topic_trends = []
 	for key in topic_multiplicity_daily.keys():
-	    daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
+		daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
 	daily_topic_trends = np.array(daily_topic_trends)
 	daily_sorted_idx = np.argsort(daily_topic_trends[:,0])
 	sorted_daily_topic_trends = daily_topic_trends[daily_sorted_idx]
@@ -360,23 +360,23 @@ def generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=15):
 
 	full_dataframe = pd.DataFrame()
 	for data_file in os.listdir('weekly_data'):
-	    loaded_comments = pd.read_csv('weekly_data/' + data_file)
-	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+		loaded_comments = pd.read_csv('weekly_data/' + data_file)
+		full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
 
 	for data_file in os.listdir('hold_out_data'):
-	    loaded_comments = pd.read_csv('hold_out_data/' + data_file)
-	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+		loaded_comments = pd.read_csv('hold_out_data/' + data_file)
+		full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
 
 	# determine the beginning and end time of the data
 	start_dates = []
 	for data_file in os.listdir('hold_out_data'):
-	    start = data_file.split('-')[0][-10:]
-	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
-	    start_dates.append(start_time)
+		start = data_file.split('-')[0][-10:]
+		start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+		start_dates.append(start_time)
 	for data_file in os.listdir('weekly_data'):
-	    start = data_file.split('-')[0][-10:]
-	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
-	    start_dates.append(start_time)
+		start = data_file.split('-')[0][-10:]
+		start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+		start_dates.append(start_time)
 	start_dates = np.array(start_dates)
 	sorted_idx = np.argsort(start_dates)
 	sorted_start_dates = start_dates[sorted_idx]
@@ -387,24 +387,28 @@ def generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=15):
 	start_datetime = topic_trend_dates[0]
 	topic_multiplicity_daily = dict()
 	for i in range(num_days):
-	    this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
-	    this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
-	    loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
-	    loaded_comments = [line.strip() for line in loaded_comments]
-	    daily_preproc_documents, daily_unproc_documents, daily_vocab = sp.preprocess(loaded_comments, keep_fit=True)
-	    daily_processed = tp.transform(text_for_contextual=daily_unproc_documents, text_for_bow=daily_preproc_documents)
+		this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
+		this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
+		loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
+		if len(loaded_comments) != 0:
+			loaded_comments = [line.strip() for line in loaded_comments]
+			daily_preproc_documents, daily_unproc_documents, daily_vocab = sp.preprocess(loaded_comments, keep_fit=True)
+			daily_processed = tp.transform(text_for_contextual=daily_unproc_documents, text_for_bow=daily_preproc_documents)
 
-	    daily_topics_per_doc = ctm.get_predicted_topics(daily_processed, 20)
-	    topic_multiplicity_daily[this_start] = np.zeros(n_topics)
-	    for j in range(n_topics):
-	    	topic_multiplicity_daily[this_start][j] = np.count_nonzero(daily_topics_per_doc == j)
-	    if len(daily_topics_per_doc) != 0 :
-	    	topic_multiplicity_daily[this_start] /= len(daily_topics_per_doc)
+			daily_topics_per_doc = ctm.get_predicted_topics(daily_processed, 5)
+			topic_multiplicity_daily[this_start] = np.zeros(n_topics)
+			for j in range(n_topics):
+				topic_multiplicity_daily[this_start][j] = np.count_nonzero(np.array(daily_topics_per_doc) == j)
+			if len(daily_topics_per_doc) != 0 :
+				topic_multiplicity_daily[this_start] /= len(daily_topics_per_doc)
+		else:
+			topic_multiplicity_daily[this_start] = np.zeros(n_topics)
+
 
 	# transform this dictionary into a sorted array
 	daily_topic_trends = []
 	for key in topic_multiplicity_daily.keys():
-	    daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
+		daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
 	daily_topic_trends = np.array(daily_topic_trends)
 	daily_sorted_idx = np.argsort(daily_topic_trends[:,0])
 	sorted_daily_topic_trends = daily_topic_trends[daily_sorted_idx]
