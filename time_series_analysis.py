@@ -58,8 +58,11 @@ def create_time_series_file(topic_model, n_topics=15):
 		documents = [line.strip() for line in comments_list]
 		sp = WhiteSpacePreprocessing(stopwords_language='english')
 		preprocessed_documents, unpreprocessed_corpus, vocab = sp.preprocess(documents)
-		tp = TopicModelDataPreparation("paraphrase-distilroberta-base-v1")
-		training_dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_documents)
+
+		with open("results/CTM_Model/training_dataset.pkl", "rb") as f:
+			training_dataset = pickle.load(f)
+		with open("results/CTM_Model/tmdp.pkl", "rb") as f:
+			tp = pickle.load(f)
 
 		ctm.load(models_dir="results/CTM_Model/",epoch=596)
 		generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=n_topics)
