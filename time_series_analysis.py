@@ -61,7 +61,7 @@ def create_time_series_file(topic_model, n_topics=15):
 		tp = TopicModelDataPreparation("paraphrase-distilroberta-base-v1")
 		training_dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_documents)
 
-		ctm.load(models_dir="results/CTM_Model/",epoch)
+		ctm.load(models_dir="results/CTM_Model/",epoch=596)
 		generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=n_topics)
 
 
@@ -498,7 +498,7 @@ if __name__ == '__main__':
 			
 			for target_index in range(args.n_topics):
 				print("TOPIC {}".format(target_index))
-				train_split = 300
+				train_split = 400
 				
 				# mape_vals = []
 				# for p in np.arange(0.05, 1., 0.05):

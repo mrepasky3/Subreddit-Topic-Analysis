@@ -13,8 +13,13 @@ from gensim.models import CoherenceModel
 from gensim.corpora.dictionary import Dictionary
 from nltk.corpus import stopwords
 
+import pickle
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_topics', type=int, default=15)
+parser.add_argument('--ctm_load', action="store_true")
+parser.add_argument('--tmdp_load', action="store_true")
+parser.set_defaults(feature=False)
 
 
 if __name__ == '__main__':
@@ -32,15 +37,26 @@ if __name__ == '__main__':
 	sp = WhiteSpacePreprocessing(stopwords_language='english')
 	preprocessed_documents, unpreprocessed_corpus, vocab = sp.preprocess(documents)
 
-	tp = TopicModelDataPreparation("paraphrase-distilroberta-base-v1")
+	if args.tmdp_load:
+		with open("results/CTM_Model/training_dataset.pkl", "rb") as f:
+			training_dataset = pickle.load(f)
+		with open("results/CTM_Model/tmdp.pkl", "rb") as f:
+			tp = pickle.load(f)
+	else:
+		tp = TopicModelDataPreparation("paraphrase-distilroberta-base-v1")
+		training_dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_documents)
+		with open("results/CTM_Model/training_dataset.pkl", "wb") as f:
+			pickle.dump(training_dataset, f)
+		with open("results/CTM_Model/tmdp.pkl", "wb") as f:
+			pickle.dump(tp, f)
 
-	training_dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_documents)
-
-	print("Fitting model")
-	ctm = CombinedTM(bow_size=len(tp.vocab), contextual_size=768, n_components=15, num_epochs=10)
-	ctm.fit(training_dataset) # run the model
-
-	ctm.save(models_dir="results/CTM_Model/")
+	if args.ctm_load:
+		ctm.load(models_dir="results/CTM_Model/", epoch=596)
+	else:
+		print("Fitting model")
+		ctm = CombinedTM(bow_size=len(tp.vocab), contextual_size=768, n_components=15, num_epochs=10)
+		ctm.fit(training_dataset) # run the model
+		ctm.save(models_dir="results/CTM_Model/")
 
 	texts = [doc.split() for doc in preprocessed_documents]
 
