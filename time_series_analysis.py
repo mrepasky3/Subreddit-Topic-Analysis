@@ -13,7 +13,7 @@ from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--n_topics', type=int, default=15)
-parser.add_argument('--topic_model', type=str, default='lda', choices=['lda', 'nmf', 'transformer'])
+parser.add_argument('--topic_model', type=str, default='lda', choices=['lda', 'nmf', 'ctm'])
 parser.add_argument('--create_time_series', action="store_true")
 parser.add_argument('--stackplot', action="store_true")
 parser.add_argument('--gridplot', action="store_true")
@@ -29,8 +29,8 @@ parser.set_defaults(feature=False)
 def create_time_series_file(topic_model, n_topics=15):
 	'''
 	Pull all training data, convert to BoW representations of
-	each comment, recording the bigram model, trigram model,
-	and dictionary. Load the fit topic model, and call teh
+	each comment, recording the bigram model (lda), trigram model (lda),
+	dictionary (lda), preprocessing (ctm). Load the fit topic model, and call
 	utility function which generates the file on the training
 	plus holdout data using these components.
 
@@ -47,12 +47,22 @@ def create_time_series_file(topic_model, n_topics=15):
 	    loaded_comments = pd.read_csv('weekly_data/' + data_file)
 	    comments_list += list(loaded_comments['body'])
 
-	comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
-	comments_bow, dictionary = create_dictionary(comments_words)
-
 	if topic_model == "lda":
+		comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
+		comments_bow, dictionary = create_dictionary(comments_words)
+
 		lda = gensim.models.LdaModel.load("results/LDA_model")
 		generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=True, n_topics=n_topics)
+
+	elif topic_model == 'ctm':
+		documents = [line.strip() for line in comments_list]
+		sp = WhiteSpacePreprocessing(stopwords_language='english')
+		preprocessed_documents, unpreprocessed_corpus, vocab = sp.preprocess(documents)
+		tp = TopicModelDataPreparation("paraphrase-distilroberta-base-v1")
+		training_dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_documents)
+
+		ctm.load(models_dir="results/CTM_Model/",epoch)
+		generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=n_topics)
 
 
 def generate_stackplot(dates, topic_freqs, savename):
@@ -391,8 +401,13 @@ if __name__ == '__main__':
 
 	if args.topic_model == 'lda':
 		daily_topic_freqs = np.load("results/lda_daily_trends.npy")
-		daily_topic_df = pd.DataFrame(daily_topic_freqs[:,1:])
-		dates = [dt.datetime.fromtimestamp(stamp) for stamp in daily_topic_freqs[:,0]]
+	elif args.topic_model == 'nmf':
+		daily_topic_freqs = np.load("results/ctm_daily_trends.npy")
+	elif args.topic_model == 'ctm':
+		daily_topic_freqs = np.load("results/ctm_daily_trends.npy")
+	daily_topic_df = pd.DataFrame(daily_topic_freqs[:,1:])
+	dates = [dt.datetime.fromtimestamp(stamp) for stamp in daily_topic_freqs[:,0]]
+
 
 	if args.stackplot:
 		generate_stackplot(dates, daily_topic_freqs, savename=args.topic_model + "_daily")

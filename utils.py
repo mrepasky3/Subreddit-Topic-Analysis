@@ -1,6 +1,7 @@
 '''
 Referenced from
 https://towardsdatascience.com/evaluate-topic-model-in-python-latent-dirichlet-allocation-lda-7d57484bb5d0
+and https://github.com/MilaNLProc/contextualized-topic-models
 '''
 import re
 import os
@@ -11,6 +12,9 @@ import gensim
 from gensim.utils import simple_preprocess
 import gensim.corpora as corpora
 from nltk.corpus import stopwords
+from sklearn.feature_extraction.text import CountVectorizer
+import string
+from gensim.utils import deaccent
 
 
 
@@ -169,6 +173,57 @@ def create_dictionary(comments_words):
 	return comments_bow, dictionary
 
 
+class WhiteSpacePreprocessing():
+    """
+    Slightly adapted from https://github.com/MilaNLProc/contextualized-topic-models
+    Provides a very simple preprocessing script that filters infrequent tokens from text
+    """
+
+    def __init__(self, stopwords_language="english", vocabulary_size=2000):
+        """
+        :param documents: list of strings
+        :param stopwords_language: string of the language of the stopwords (see nltk stopwords)
+        :param vocabulary_size: the number of most frequent words to include in the documents. Infrequent words will be discarded from the list of preprocessed documents
+        """
+        self.stopwords = set(stopwords.words(stopwords_language))
+        self.vocabulary_size = vocabulary_size
+        self.max_df = 1.0
+
+    def preprocess(self, documents, keep_fit=False):
+        """
+        Note that if after filtering some documents do not contain words we remove them. That is why we return also the
+        list of unpreprocessed documents.
+        :return: preprocessed documents, unpreprocessed documents and the vocabulary list
+        """
+        preprocessed_docs_tmp = documents
+        preprocessed_docs_tmp = [deaccent(doc.lower()) for doc in preprocessed_docs_tmp]
+        preprocessed_docs_tmp = [doc.translate(
+            str.maketrans(string.punctuation, ' ' * len(string.punctuation))) for doc in preprocessed_docs_tmp]
+        preprocessed_docs_tmp = [' '.join([w for w in doc.split() if len(w) > 0 and w not in self.stopwords])
+                                 for doc in preprocessed_docs_tmp]
+
+        if not keep_fit:
+	        self.vectorizer = CountVectorizer(max_features=self.vocabulary_size, max_df=self.max_df)
+	        self.vectorizer.fit_transform(preprocessed_docs_tmp)
+	        self.temp_vocabulary = set(self.vectorizer.get_feature_names())
+
+        preprocessed_docs_tmp = [' '.join([w for w in doc.split() if w in self.temp_vocabulary])
+                                 for doc in preprocessed_docs_tmp]
+
+        # the size of the preprocessed or unpreprocessed_docs might be less than given docs
+        # for that reason, we need to return retained indices to change the shape of given custom embeddings.
+        preprocessed_docs, unpreprocessed_docs, retained_indices = [], [], []
+        for i, doc in enumerate(preprocessed_docs_tmp):
+            if len(doc) > 0:
+                preprocessed_docs.append(doc)
+                unpreprocessed_docs.append(documents[i])
+                retained_indices.append(i)
+
+        vocabulary = list(set([item for doc in preprocessed_docs for item in doc.split()]))
+
+        return preprocessed_docs, unpreprocessed_docs, vocabulary
+
+
 def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=False, n_topics=15):
 	'''
 	Given fit LDA, n-gram models, and dictionary, gather all the
@@ -190,6 +245,8 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 	save : bool
 		indicate whether or not the daily trend array should
 		be saved as a numpy file
+	n_topics : int
+		number of topics in the model
 
 	Returns
 	-------
@@ -263,5 +320,97 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 
 	if save:
 		np.save("results/lda_daily_trends.npy",sorted_daily_topic_trends)
+
+	return daily_topic_trend_dates, sorted_daily_topic_trends
+
+
+def generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=15):
+	'''
+	Given fit LDA, n-gram models, and dictionary, gather all the
+	data, convert to BoW representations of each comment made in
+	each day, assign each comment to the most-probable topic, record
+	portion of each days comments belonging to each topic, return
+	and save this array sorted in time.
+
+	Parameters
+	----------
+	ctm : contextualized-topic-models CombinedTM
+		trained contextualized topic model
+	sp : contextualized-topic-models WhiteSpacePreprocessing
+		pretrained white space and vocabulary for preprocessing
+	tp : contextualized-topic-models TopicModelDataPreparation
+		fit model which prepares data for prediction
+	save : bool
+		indicate whether or not the daily trend array should
+		be saved as a numpy file
+	n_topics : int
+		number of topics in the model
+
+	Returns
+	-------
+	daily_topic_trend_dates : list of datetime
+		sorted list of datetime objects corresponding to
+		the first column of timestamps in the topic frequency array
+	sorted_daily_topic_trends : numpy array
+		temporally-sorted (num_days x num_topics+1) array which stores
+		the unix timestamp as the first column and the portion of comments
+		belonging to each topic for each corresponding day as each
+		of the remaining columns
+	'''
+
+	full_dataframe = pd.DataFrame()
+	for data_file in os.listdir('weekly_data'):
+	    loaded_comments = pd.read_csv('weekly_data/' + data_file)
+	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+
+	for data_file in os.listdir('hold_out_data'):
+	    loaded_comments = pd.read_csv('hold_out_data/' + data_file)
+	    full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+
+	# determine the beginning and end time of the data
+	start_dates = []
+	for data_file in os.listdir('hold_out_data'):
+	    start = data_file.split('-')[0][-10:]
+	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+	    start_dates.append(start_time)
+	for data_file in os.listdir('weekly_data'):
+	    start = data_file.split('-')[0][-10:]
+	    start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+	    start_dates.append(start_time)
+	start_dates = np.array(start_dates)
+	sorted_idx = np.argsort(start_dates)
+	sorted_start_dates = start_dates[sorted_idx]
+	topic_trend_dates = [dt.datetime.fromtimestamp(stamp) for stamp in sorted_start_dates]
+
+	# create dictionary tracking how frequently each topic is present per day
+	num_days = (topic_trend_dates[-1] - topic_trend_dates[0] + dt.timedelta(days=7)).days
+	start_datetime = topic_trend_dates[0]
+	topic_multiplicity_daily = dict()
+	for i in range(num_days):
+	    this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
+	    this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
+	    loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
+	    loaded_comments = [line.strip() for line in loaded_comments]
+	    daily_preproc_documents, daily_unproc_documents, daily_vocab = sp.preprocess(loaded_comments, keep_fit=True)
+	    daily_processed = tp.transform(text_for_contextual=daily_unproc_documents, text_for_bow=daily_preproc_documents)
+
+	    daily_topics_per_doc = ctm.get_predicted_topics(daily_processed, 20)
+	    topic_multiplicity_daily[this_start] = np.zeros(n_topics)
+	    for j in range(n_topics):
+	    	topic_multiplicity_daily[this_start][j] = np.count_nonzero(daily_topics_per_doc == j)
+	    if len(daily_topics_per_doc) != 0 :
+	    	topic_multiplicity_daily[this_start] /= len(daily_topics_per_doc)
+
+	# transform this dictionary into a sorted array
+	daily_topic_trends = []
+	for key in topic_multiplicity_daily.keys():
+	    daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
+	daily_topic_trends = np.array(daily_topic_trends)
+	daily_sorted_idx = np.argsort(daily_topic_trends[:,0])
+	sorted_daily_topic_trends = daily_topic_trends[daily_sorted_idx]
+	daily_topic_trend_dates = [dt.datetime.fromtimestamp(stamp) for stamp in sorted_daily_topic_trends[:,0]]
+
+	if save:
+		np.save("results/ctm_daily_trends.npy",sorted_daily_topic_trends)
 
 	return daily_topic_trend_dates, sorted_daily_topic_trends
