@@ -34,6 +34,7 @@ if __name__ == '__main__':
 
 
 	documents = [line.strip() for line in comments_list]
+	documents = documents[: len(documents) // batch_size * batch_size]
 	sp = WhiteSpacePreprocessing(stopwords_language='english')
 	preprocessed_documents, unpreprocessed_corpus, vocab = sp.preprocess(documents)
 
@@ -51,7 +52,8 @@ if __name__ == '__main__':
 			pickle.dump(tp, f)
 
 	if args.ctm_load:
-		ctm.load(models_dir="results/CTM_Model/", epoch=596)
+		with open("results/CTM_Model/ctm.pkl", "rb") as f:
+  			ctm = pickle.load(f)
 	else:
 		print("Fitting model")
 		ctm = CombinedTM(bow_size=len(tp.vocab), contextual_size=768, n_components=15, num_epochs=10)
