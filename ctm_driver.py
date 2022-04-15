@@ -27,7 +27,7 @@ parser.add_argument('--n_topics', type=int, default=15)
 parser.add_argument('--weekly_series', action="store_true")
 parser.add_argument('--daily_series', action="store_true")
 parser.add_argument('--load', action="store_true")
-parset.add_argument('--ctm_load', action="store_true")
+parser.add_argument('--ctm_load', action="store_true")
 parser.set_defaults(feature=False)
 
 
@@ -58,10 +58,11 @@ if __name__ == '__main__':
 
 		training_dataset = tp.fit(text_for_contextual=unpreprocessed_corpus, text_for_bow=preprocessed_documents)
 
+		print("Fitting model")
 		ctm = CombinedTM(bow_size=len(tp.vocab), contextual_size=768, n_components=15, num_epochs=10)
 		ctm.fit(training_dataset) # run the model
 
-		ctm.save(models_dir="results/CTM_Model/")
+		#ctm.save(models_dir="results/CTM_Model/")
 
 		texts = [doc.split() for doc in preprocessed_documents]
 
