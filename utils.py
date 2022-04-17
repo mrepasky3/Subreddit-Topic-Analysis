@@ -403,7 +403,7 @@ def generate_time_series_nmf(nmf, bigram_model, trigram_model, dictionary, save=
 		topic_multiplicity_daily[key] = np.zeros(n_topics)
 		this_day_comments = comments_list_daily[key]
 		for comment in this_day_comments:
-			topic_dist = nmf.get_document_topics(comment,per_word_topics=False)
+			topic_dist = nmf.get_document_topics(comment)
 			top_topic_idx = np.argmax(np.array(topic_dist)[:,1])
 			top_topic = topic_dist[top_topic_idx][0]
 			topic_multiplicity_daily[key][top_topic] += 1
