@@ -73,6 +73,47 @@ if __name__ == '__main__':
 		report_file.close()
 
 
+	elif args.topic_model == 'nmf':
+		if not os.path.exists("results/nmf_clouds"):
+			os.mkdir('results/nmf_clouds')
+		report_file = open("results/nmf_clouds/coherence.txt", 'w')
+
+		stop_words = stopwords.words('english')
+		stop_words.extend(['im','ive','dont','get','youre','would','thats',
+			'really','one','also','something','even','thing','things','must',
+			'cant','much','could','way','lot','got','get','go','like','th'])
+
+		comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
+		comments_bow, dictionary = create_dictionary(comments_words)
+
+		lda = gensim.models.LdaModel.load("results/NMF_Model/NMF_model")
+
+		cv = CoherenceModel(model=lda, texts=comments_words, dictionary=dictionary, coherence='c_v')
+		report_file.write("Overall Coherence: {:.3f}\n".format(cv.get_coherence()))
+
+		per_topic_coherence = cv.get_coherence_per_topic()
+		topics_sorted_by_coherence = np.argsort(per_topic_coherence)[::-1]
+		topics_sorted_by_coherence = list(topics_sorted_by_coherence)
+
+		topics = lda.show_topics(num_topics=args.n_topics, formatted=False, num_words=20)
+
+		cloud = WordCloud(stopwords=stop_words,background_color='white',width=800, height=400)
+		for k in range(args.n_topics):
+			fig = plt.figure(figsize=(20,10))
+			for topic in topics:
+				if topic[0] == k:
+					topic_dict = dict(topic[1])
+			report_file.write('Topic {} C_v: {:.3f}\n'.format(k, per_topic_coherence[k]))
+			cloud.generate_from_frequencies(topic_dict, max_font_size=300)
+			plt.imshow(cloud)
+			plt.axis('off')
+			plt.savefig("results/nmf_clouds/nmf_topic{}.png".format(k))
+			plt.close()
+			plt.clf()
+
+		report_file.close()
+
+
 	elif args.topic_model == 'ctm':
 		if not os.path.exists("results/ctm_clouds"):
 			os.mkdir('results/ctm_clouds')

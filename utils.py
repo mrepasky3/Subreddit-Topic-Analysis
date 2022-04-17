@@ -10,11 +10,11 @@ import pandas as pd
 import datetime as dt
 import gensim
 from gensim.utils import simple_preprocess
+from gensim.utils import deaccent
 import gensim.corpora as corpora
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import CountVectorizer
 import string
-from gensim.utils import deaccent
 
 
 
