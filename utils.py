@@ -402,13 +402,16 @@ def generate_time_series_nmf(nmf, bigram_model, trigram_model, dictionary, save=
 	for key in comments_list_daily.keys():
 		topic_multiplicity_daily[key] = np.zeros(n_topics)
 		this_day_comments = comments_list_daily[key]
+		daily_counter = 0
 		for comment in this_day_comments:
 			topic_dist = nmf.get_document_topics(comment)
-			top_topic_idx = np.argmax(np.array(topic_dist)[:,1])
-			top_topic = topic_dist[top_topic_idx][0]
-			topic_multiplicity_daily[key][top_topic] += 1
-		if len(this_day_comments) != 0 :
-			topic_multiplicity_daily[key] /= len(this_day_comments)
+			if len(topic_dist) != 0:
+				daily_counter += 1
+				top_topic_idx = np.argmax(np.array(topic_dist)[:,1])
+				top_topic = topic_dist[top_topic_idx][0]
+				topic_multiplicity_daily[key][top_topic] += 1
+		if daily_counter != 0 :
+			topic_multiplicity_daily[key] /= daily_counter
 
 	# transform this dictionary into a sorted array
 	daily_topic_trends = []
