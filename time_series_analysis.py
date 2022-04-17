@@ -20,6 +20,7 @@ parser.add_argument('--topic_model', type=str, default='lda', choices=['lda', 'n
 parser.add_argument('--create_time_series', action="store_true")
 parser.add_argument('--stackplot', action="store_true")
 parser.add_argument('--gridplot', action="store_true")
+parser.add_argument('--individual_plots', action="store_true")
 parser.add_argument('--partial_corr', action="store_true")
 parser.add_argument('--partial_corr_full', action="store_true")
 parser.add_argument('--top_corr_table', action='store_true')
@@ -149,6 +150,45 @@ def generate_gridplot(dates, topic_freqs, savename):
 	plt.savefig("results/{}_gridplot.png".format(savename))
 	plt.close()
 	plt.clf()
+
+
+def individual_plots(dates, topic_freqs, topic_model):
+	'''
+	Create plots representing frequency of each
+	topic throughout the dates provided in dates.
+
+	Parameters
+	----------
+	dates : list of datetime
+		dates corresponding to each freqeuncy metric
+	topic_freqs : (N, n_topics+1) numpy array
+		first column is timestamp, remaining columns
+		represent frequency of each topic on each date
+	topic_model : str
+		name for saving the image in the results folder
+	'''
+
+	color_list = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
+			  'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan',
+			  'chartreuse', 'dodgerblue', 'indigo', 'blue', 'teal']
+
+	for k in range(args.n_topics):
+		fig = plt.figure(figsize=(10, 5))
+		
+		plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
+		plt.plot(dates, topic_freqs[:,k+1], ls='-', color=color_list[k])
+		
+		plt.tick_params(labelsize=12)
+		plt.tick_params(axis='x', rotation=25)
+		
+		plt.ylim(topic_freqs[:,k+1].mean()-3*topic_freqs[:,k+1].std(), topic_freqs[:,k+1].mean()+5*topic_freqs[:,k+1].std())
+		plt.xlabel('Date', fontsize=16)
+		plt.ylabel('Topic Proportion', fontsize=16)
+		plt.title("{} Topic {}".format(topic_model.upper(), k), fontsize=16)
+		
+		plt.savefig("results/{}_plots/{}_topic{}.png".format(topic_model,topic_model,k))
+		plt.close()
+		plt.clf()
 
 
 def partial_correlation(feature_series, target_series, lags=182):
@@ -431,6 +471,12 @@ if __name__ == '__main__':
 		generate_gridplot(dates, daily_topic_freqs, savename=args.topic_model + "_daily")
 
 
+	if args.individual_plots:
+		if not os.path.exists("results/{}_plots/".format(args.topic_model)):
+			os.mkdir("results/{}_plots/".format(args.topic_model))
+		individual_plots(dates, daily_topic_freqs, topic_model=args.topic_model)
+
+
 	if args.partial_corr:
 		n_topics = daily_topic_df.shape[1]
 		partial_corr_table = np.zeros((182-1,n_topics**2))
@@ -530,7 +576,7 @@ if __name__ == '__main__':
 				preds = res.get_prediction(pd.concat([X_train,X_test]))
 				pred_result = preds.summary_frame()
 
-				fig = plt.figure(figsize=(15,5))
+				fig = plt.figure(figsize=(12,5))
 
 				plt.plot(dates[-(y_train.shape[0] + y_test.shape[0]):-y_test.shape[0]], y_train, color='k', label="Measured Frequency")
 				plt.plot(dates[-y_test.shape[0]:], y_test, color='k')
@@ -540,16 +586,16 @@ if __name__ == '__main__':
 				plt.fill_between(dates[(len(dates) - pred_result['mean'].shape[0]):],
 					pred_result['mean_ci_lower'], pred_result['mean_ci_upper'], color='r', alpha=.1, label="95% Confidence Interval")
 
-				plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
+				#plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
 
 				plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
-				plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
-				plt.xlabel('Date', fontsize=16)
-				plt.ylabel('Topic Proportion', fontsize=16)
-				plt.tick_params(labelsize=12)
+				#plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
+				#plt.xlabel('Date', fontsize=16)
+				plt.ylabel('Topic Proportion', fontsize=22)
+				plt.tick_params(labelsize=20)
 				plt.tick_params(axis='x', rotation=25)
 
-				plt.legend(fontsize=12)
+				#plt.legend(fontsize=12)
 				plt.tight_layout()
 				plt.savefig("results/{}_VAR/individual/Target_{}.png".format(args.topic_model, target_index))
 				plt.close()
@@ -581,7 +627,7 @@ if __name__ == '__main__':
 				preds = res.get_prediction(pd.concat([X_train,X_test]))
 				pred_result = preds.summary_frame()
 
-				fig = plt.figure(figsize=(15,5))
+				fig = plt.figure(figsize=(12,5))
 
 				plt.plot(dates[-(y_train.shape[0] + y_test.shape[0]):-y_test.shape[0]], y_train, color='k', label="Measured Frequency")
 				plt.plot(dates[-y_test.shape[0]:], y_test, color='k')
@@ -591,16 +637,16 @@ if __name__ == '__main__':
 				plt.fill_between(dates[(len(dates) - pred_result['mean'].shape[0]):],
 					pred_result['mean_ci_lower'], pred_result['mean_ci_upper'], color='r', alpha=.1, label="95% Confidence Interval")
 
-				plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
+				#plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
 
 				plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
-				plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
-				plt.xlabel('Date', fontsize=16)
-				plt.ylabel('Topic Proportion', fontsize=16)
-				plt.tick_params(labelsize=12)
+				#plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
+				#plt.xlabel('Date', fontsize=16)
+				plt.ylabel('Topic Proportion', fontsize=22)
+				plt.tick_params(labelsize=20)
 				plt.tick_params(axis='x', rotation=25)
 
-				plt.legend(fontsize=12)
+				#plt.legend(fontsize=12)
 				plt.tight_layout()
 				plt.savefig("results/{}_VAR/full/Target_{}.png".format(args.topic_model, target_index))
 				plt.close()
