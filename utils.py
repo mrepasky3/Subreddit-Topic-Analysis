@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import gensim
+import gensim.models.nmf
 from gensim.utils import simple_preprocess
 from gensim.utils import deaccent
 import gensim.corpora as corpora
@@ -324,9 +325,109 @@ def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=
 	return daily_topic_trend_dates, sorted_daily_topic_trends
 
 
+def generate_time_series_nmf(nmf, bigram_model, trigram_model, dictionary, save=False, n_topics=15):
+	'''
+	Given fit NMF, n-gram models, and dictionary, gather all the
+	data, convert to BoW representations of each comment made in
+	each day, assign each comment to the most-probable topic, record
+	portion of each days comments belonging to each topic, return
+	and save this array sorted in time.
+
+	Parameters
+	----------
+	nmf : gensim Nmf
+		trained NMF model
+	bigram_model : gensim Phrases
+		fit model which converts word pairs in lists of tokens to bigrams
+	trigram_model : gensim Phrases
+		fit model which converts bigrams in lists of tokens to trigrams
+	dictionary : gensim Dictionary
+		dictionary used for fitting LDA model
+	save : bool
+		indicate whether or not the daily trend array should
+		be saved as a numpy file
+	n_topics : int
+		number of topics in the model
+
+	Returns
+	-------
+	daily_topic_trend_dates : list of datetime
+		sorted list of datetime objects corresponding to
+		the first column of timestamps in the topic frequency array
+	sorted_daily_topic_trends : numpy array
+		temporally-sorted (num_days x num_topics+1) array which stores
+		the unix timestamp as the first column and the portion of comments
+		belonging to each topic for each corresponding day as each
+		of the remaining columns
+	'''
+	
+	full_dataframe = pd.DataFrame()
+	for data_file in os.listdir('weekly_data'):
+		loaded_comments = pd.read_csv('weekly_data/' + data_file)
+		full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+
+	for data_file in os.listdir('hold_out_data'):
+		loaded_comments = pd.read_csv('hold_out_data/' + data_file)
+		full_dataframe = pd.concat([full_dataframe,loaded_comments], axis=0)
+
+	# determine the beginning and end time of the data
+	start_dates = []
+	for data_file in os.listdir('hold_out_data'):
+		start = data_file.split('-')[0][-10:]
+		start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+		start_dates.append(start_time)
+	for data_file in os.listdir('weekly_data'):
+		start = data_file.split('-')[0][-10:]
+		start_time = int(dt.datetime.strptime(start, '%d_%m_%Y').timestamp())
+		start_dates.append(start_time)
+	start_dates = np.array(start_dates)
+	sorted_idx = np.argsort(start_dates)
+	sorted_start_dates = start_dates[sorted_idx]
+	topic_trend_dates = [dt.datetime.fromtimestamp(stamp) for stamp in sorted_start_dates]
+
+	# create dictionary of tokenized comment lists for each day
+	num_days = (topic_trend_dates[-1] - topic_trend_dates[0] + dt.timedelta(days=7)).days
+	start_datetime = topic_trend_dates[0]
+	comments_list_daily = dict()
+	for i in range(num_days):
+		this_start = (start_datetime + dt.timedelta(days=i)).timestamp()
+		this_end = (start_datetime + dt.timedelta(days=1+i)).timestamp()
+		loaded_comments = list(full_dataframe[full_dataframe['created_utc'].between(this_start,this_end)]['body'])
+		tokenized_loaded_comments, _, _ = tokenize_lda(data_cleaning(loaded_comments), bigram_model=bigram_model, trigram_model=trigram_model)
+		bow_loaded_comments = [dictionary.doc2bow(comment) for comment in tokenized_loaded_comments]
+		comments_list_daily[this_start] = bow_loaded_comments
+
+	# create dictionary tracking how frequently each topic is present per day
+	topic_multiplicity_daily = dict()
+	for key in comments_list_daily.keys():
+		topic_multiplicity_daily[key] = np.zeros(n_topics)
+		this_day_comments = comments_list_daily[key]
+		for comment in this_day_comments:
+			topic_dist = nmf.get_document_topics(comment,per_word_topics=False)
+			top_topic_idx = np.argmax(np.array(topic_dist)[:,1])
+			top_topic = topic_dist[top_topic_idx][0]
+			topic_multiplicity_daily[key][top_topic] += 1
+		if len(this_day_comments) != 0 :
+			topic_multiplicity_daily[key] /= len(this_day_comments)
+
+	# transform this dictionary into a sorted array
+	daily_topic_trends = []
+	for key in topic_multiplicity_daily.keys():
+		daily_topic_trends.append([key]+list(topic_multiplicity_daily[key]))
+	daily_topic_trends = np.array(daily_topic_trends)
+	daily_sorted_idx = np.argsort(daily_topic_trends[:,0])
+	sorted_daily_topic_trends = daily_topic_trends[daily_sorted_idx]
+	daily_topic_trend_dates = [dt.datetime.fromtimestamp(stamp) for stamp in sorted_daily_topic_trends[:,0]]
+
+	if save:
+		np.save("results/nmf_daily_trends.npy",sorted_daily_topic_trends)
+
+	return daily_topic_trend_dates, sorted_daily_topic_trends
+
+
 def generate_time_series_ctm(ctm, sp, tp, save=True, n_topics=15):
 	'''
-	Given fit LDA, n-gram models, and dictionary, gather all the
+	Given fit CTM and pre-processing models, gather all the
 	data, convert to BoW representations of each comment made in
 	each day, assign each comment to the most-probable topic, record
 	portion of each days comments belonging to each topic, return

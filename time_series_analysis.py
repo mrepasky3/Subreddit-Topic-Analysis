@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import pacf
+import gensim.models.nmf
 from gensim.models import CoherenceModel
 import pandas as pd
 import numpy as np
@@ -55,6 +56,13 @@ def create_time_series_file(topic_model, n_topics=15):
 
 		lda = gensim.models.LdaModel.load("results/LDA_model")
 		generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=True, n_topics=n_topics)
+
+	elif topic_model == "nmf":
+		comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
+		comments_bow, dictionary = create_dictionary(comments_words)
+
+		nmf = gensim.models.nmf.Nmf.load("results/NMF_Model/NMF_model")
+		generate_time_series_nmf(nmf, bigram_model, trigram_model, dictionary, save=True, n_topics=n_topics)
 
 	elif topic_model == 'ctm':
 		documents = [line.strip() for line in comments_list]
@@ -408,7 +416,7 @@ if __name__ == '__main__':
 	if args.topic_model == 'lda':
 		daily_topic_freqs = np.load("results/lda_daily_trends.npy")
 	elif args.topic_model == 'nmf':
-		daily_topic_freqs = np.load("results/ctm_daily_trends.npy")
+		daily_topic_freqs = np.load("results/nmf_daily_trends.npy")
 	elif args.topic_model == 'ctm':
 		daily_topic_freqs = np.load("results/ctm_daily_trends.npy")
 	daily_topic_df = pd.DataFrame(daily_topic_freqs[:,1:])

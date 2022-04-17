@@ -7,6 +7,7 @@ from wordcloud import WordCloud
 from utils import *
 
 import gensim
+import gensim.models.nmf
 from gensim.models import CoherenceModel
 from gensim.corpora.dictionary import Dictionary
 from nltk.corpus import stopwords
@@ -86,16 +87,16 @@ if __name__ == '__main__':
 		comments_words, bigram_model, trigram_model = tokenize_lda(data_cleaning(comments_list))
 		comments_bow, dictionary = create_dictionary(comments_words)
 
-		lda = gensim.models.LdaModel.load("results/NMF_Model/NMF_model")
+		nmf = gensim.models.nmf.Nmf.load("results/NMF_Model/NMF_model")
 
-		cv = CoherenceModel(model=lda, texts=comments_words, dictionary=dictionary, coherence='c_v')
+		cv = CoherenceModel(model=nmf, texts=comments_words, dictionary=dictionary, coherence='c_v')
 		report_file.write("Overall Coherence: {:.3f}\n".format(cv.get_coherence()))
 
 		per_topic_coherence = cv.get_coherence_per_topic()
 		topics_sorted_by_coherence = np.argsort(per_topic_coherence)[::-1]
 		topics_sorted_by_coherence = list(topics_sorted_by_coherence)
 
-		topics = lda.show_topics(num_topics=args.n_topics, formatted=False, num_words=20)
+		topics = nmf.show_topics(num_topics=args.n_topics, formatted=False, num_words=20)
 
 		cloud = WordCloud(stopwords=stop_words,background_color='white',width=800, height=400)
 		for k in range(args.n_topics):
