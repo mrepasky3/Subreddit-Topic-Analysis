@@ -586,16 +586,16 @@ if __name__ == '__main__':
 				plt.fill_between(dates[(len(dates) - pred_result['mean'].shape[0]):],
 					pred_result['mean_ci_lower'], pred_result['mean_ci_upper'], color='r', alpha=.1, label="95% Confidence Interval")
 
-				#plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
+				plt.axvline(dates[-y_test.shape[0]], color='k', ls='--', label="Train-Test Split")
 
 				plt.gca().xaxis.set_major_formatter(matplotlib.dates.DateFormatter('%b %Y'))
-				#plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=16)
+				#plt.title("{} Topic {}".format(args.topic_model.upper(), target_index), fontsize=22)
 				#plt.xlabel('Date', fontsize=16)
-				plt.ylabel('Topic Proportion', fontsize=22)
-				plt.tick_params(labelsize=20)
+				plt.ylabel('Topic Proportion', fontsize=16)
+				plt.tick_params(labelsize=16)
 				plt.tick_params(axis='x', rotation=25)
 
-				#plt.legend(fontsize=12)
+				#plt.legend(fontsize=14)
 				plt.tight_layout()
 				plt.savefig("results/{}_VAR/individual/Target_{}.png".format(args.topic_model, target_index))
 				plt.close()

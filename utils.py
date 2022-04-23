@@ -20,7 +20,7 @@ import string
 
 
 
-def data_cleaning(comments_list):
+def data_cleaning(comments_list, return_indices=False):
 	'''
 	Remove links, control sequences, emojis, and likely bots
 
@@ -39,6 +39,7 @@ def data_cleaning(comments_list):
 	'''
 
 	cleaned_comments = []
+	kept_indices = []
 	for i in range(len(comments_list)):
 		# remove brackets
 		semi_clean = np.array(re.sub('\]',' ',re.sub('\[','',comments_list[i])).split())
@@ -73,8 +74,12 @@ def data_cleaning(comments_list):
 		if (len(clean) > 0) and ('ɴᴏᴡ ᴘʟᴀʏɪɴɢ' not in clean) and ('bleep' not in clean) and ('beep' not in clean):
 			if ('[view link]' not in clean) and ('i am a bot' not in clean) and ('dmca removal request for' not in clean):
 				cleaned_comments.append(clean)
-
-	return cleaned_comments
+				kept_indices.append(i)
+	
+	if return_indices:
+		return cleaned_comments, kept_indices
+	else:
+		return cleaned_comments
 
 
 def tokenize_lda(cleaned_comments, bigram_model=None, trigram_model=None):
@@ -190,7 +195,7 @@ class WhiteSpacePreprocessing():
 		self.vocabulary_size = vocabulary_size
 		self.max_df = 1.0
 
-	def preprocess(self, documents, keep_fit=False):
+	def preprocess(self, documents, keep_fit=False, return_indices=False):
 		"""
 		Note that if after filtering some documents do not contain words we remove them. That is why we return also the
 		list of unpreprocessed documents.
@@ -222,7 +227,10 @@ class WhiteSpacePreprocessing():
 
 		vocabulary = list(set([item for doc in preprocessed_docs for item in doc.split()]))
 
-		return preprocessed_docs, unpreprocessed_docs, vocabulary
+		if return_indices:
+			return preprocessed_docs, unpreprocessed_docs, vocabulary, retained_indices
+		else:
+			return preprocessed_docs, unpreprocessed_docs, vocabulary
 
 
 def generate_time_series_lda(lda, bigram_model, trigram_model, dictionary, save=False, n_topics=15):
