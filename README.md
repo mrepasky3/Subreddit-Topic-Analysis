@@ -8,7 +8,7 @@ from December 2019 - December 2021 using the [Pushshift Reddit API](https://gith
 are fit to the data, followed by a time series partial correlation anaylsis and the construction of a set of vector autoregression models (one VAR model
 per topic per topic model).
 
-To properly run the code, first generate a conda environment `conda create --name reddit_mental_health --file conda_requirements.txt`. Then, run the commands as outlined below.
+To avoid gathering the data (step 1 below), place the two folders [at this link](https://drive.google.com/drive/folders/11nL8VhAw70KdypHs00abc4vmTSJMGjpF?usp=sharing) in the top directory of this repository. To properly run the code, first generate a conda environment `conda create --name reddit_mental_health --file conda_requirements.txt`. Then, run the commands as outlined below.
 
 The files have the following roles:  
 1. Data Gathering: `extract_weekly_data_*_.py` files use the gathered list of subreddits and the pushshift API to pull comment data from Reddit and deposit them into files spanning one week each of data. These can be run directly from the command line using Python.
